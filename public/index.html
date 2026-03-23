@@ -245,6 +245,13 @@
         const JUMP_FORCE = 0.18;
         const GRAVITY = 0.010;
         
+        // SLOWER BALL PHYSICS
+        const BALL_GRAVITY = 0.003;      // Much lower gravity (was 0.006)
+        const BALL_BOUNCE = 0.5;          // Less bounce (was 0.65)
+        const BALL_FRICTION = 0.99;       // More friction (was 0.995)
+        const BALL_HIT_POWER = 0.5;       // Reduced hit power (was 0.8)
+        const BALL_Y_BOOST = 0.08;        // Lower vertical hit (was 0.12)
+        
         const keys = {};
         
         // Socket events
@@ -392,11 +399,7 @@
             gridHelper.position.y = 0.01;
             scene.add(gridHelper);
             
-            const circleMat = new THREE.MeshPhongMaterial({ color: 0x338833, emissive: 0x114411 });
-            const centerCircle = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 0.05, 32), circleMat);
-            centerCircle.position.set(0, 0, 0);
-            centerCircle.rotation.x = Math.PI / 2;
-            scene.add(centerCircle);
+            // CENTER CIRCLE REMOVED - No more half circle in the middle!
             
             function createCar(color, position, rotation) {
                 const group = new THREE.Group();
@@ -555,13 +558,13 @@
         
         function updateBall() {
             ball.position.add(ballVel);
-            ballVel.multiplyScalar(0.995);
+            ballVel.multiplyScalar(BALL_FRICTION);
             
             if (ball.position.y > 1.2) {
-                ballVel.y -= 0.006;
+                ballVel.y -= BALL_GRAVITY;
             } else {
                 ball.position.y = 1.2;
-                ballVel.y *= -0.65;
+                ballVel.y *= -BALL_BOUNCE;
                 ballVel.x *= 0.98;
                 ballVel.z *= 0.98;
             }
@@ -593,11 +596,12 @@
                 }
             }
             
+            // SLOWER BALL HITS
             if (myCar.position.distanceTo(ball.position) < 2.3) {
                 const hitDir = ball.position.clone().sub(myCar.position).normalize();
-                const hitPower = Math.abs(myVel.z) * 0.8 + 0.3;
+                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.2;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
-                ballVel.y += 0.12;
+                ballVel.y += BALL_Y_BOOST;
             }
         }
         
