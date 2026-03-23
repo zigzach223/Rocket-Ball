@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rocket-Ball - Online Multiplayer 3D Game</title>
+    <title>Rocket-Ball - Online Multiplayer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Arial', sans-serif; background: #000; overflow: hidden; }
@@ -210,6 +210,19 @@
             font-family: monospace;
             z-index: 10;
         }
+        
+        .camera-indicator {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #ffaa44;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -217,7 +230,7 @@
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET-BALL 🚗</h1>
-            <div class="subtitle">3D Online Multiplayer</div>
+            <div class="subtitle">Online Multiplayer - Full Screen!</div>
             
             <div id="mainMenu">
                 <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
@@ -264,6 +277,7 @@
             <div class="boost-fill" id="boostFill"></div>
         </div>
         <div class="speedometer" id="speedometer">SPEED: 0 km/h</div>
+        <div class="camera-indicator" id="camIndicator">🎥 Car Cam (Q/E)</div>
         <div class="controls-hint">
             🎮 WASD + SHIFT (Boost) + SPACE (Jump) | Q/E: Toggle Camera
         </div>
@@ -298,9 +312,9 @@
         let lastSendTime = 0;
         const SEND_RATE = 1000 / 30;
         
-        // Physics constants
-        const MAX_NORMAL_SPEED = 1.2;
-        const MAX_BOOST_SPEED = 2.0;
+        // Physics constants (YOUR EXACT VALUES)
+        const MAX_NORMAL_SPEED = 0.2;
+        const MAX_BOOST_SPEED = 0.3;
         const ACCEL = 0.018;
         const BOOST_ACCEL = 0.042;
         const TURN_SPEED = 0.028;
@@ -314,6 +328,7 @@
         // ========== SOCKET EVENT HANDLERS ==========
         socket.on('connect', () => {
             document.getElementById('connStatus').innerHTML = '✅ Connected';
+            console.log('Connected to server!');
         });
         
         socket.on('lobby-created', (data) => {
@@ -327,10 +342,11 @@
             document.getElementById('waitingRoom').classList.remove('hidden');
             document.getElementById('hostControls').classList.remove('hidden');
             document.getElementById('waitingText').style.display = 'none';
+            console.log('Lobby created:', data.code);
         });
         
-        socket.on('join-success', (data) => {
-            currentLobby = data.lobbyCode;
+        socket.on('room-joined', (data) => {
+            currentLobby = data.roomCode;
             isHost = false;
             amIBlue = false;
             updatePlayerList(data.players);
@@ -339,6 +355,7 @@
             document.getElementById('waitingRoom').classList.remove('hidden');
             document.getElementById('hostControls').classList.add('hidden');
             document.getElementById('waitingText').style.display = 'block';
+            console.log('Joined lobby:', data.roomCode);
         });
         
         socket.on('player-joined', (data) => {
@@ -349,21 +366,22 @@
             document.getElementById('lobbyScreen').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'block';
             initGame();
+            console.log('Game starting!');
         });
         
         socket.on('game-update', (data) => {
-            if (opponentCar) {
+            if (opponentCar && data.car) {
                 opponentCar.position.x = data.car.x;
                 opponentCar.position.z = data.car.z;
                 opponentCar.position.y = data.car.y;
                 opponentCar.rotation.y = data.car.rot;
-                opponentVel = new THREE.Vector3(data.car.vx, data.car.vy, data.car.vz);
+                opponentVel = new THREE.Vector3(data.car.vx || 0, data.car.vy || 0, data.car.vz || 0);
             }
-            if (data.ball) {
+            if (data.ball && ball) {
                 ball.position.x = data.ball.x;
                 ball.position.z = data.ball.z;
                 ball.position.y = data.ball.y;
-                ballVel = new THREE.Vector3(data.ball.vx, data.ball.vy, data.ball.vz);
+                ballVel = new THREE.Vector3(data.ball.vx || 0, data.ball.vy || 0, data.ball.vz || 0);
             }
             if (data.score) {
                 scoreBlue = data.score.blue;
@@ -383,7 +401,7 @@
             setTimeout(() => goalPopup.style.display = 'none', 1500);
         });
         
-        socket.on('join-error', (data) => {
+        socket.on('error', (data) => {
             document.getElementById('joinError').innerText = data.message;
             setTimeout(() => document.getElementById('joinError').innerText = '', 3000);
         });
@@ -395,9 +413,9 @@
         
         // ========== LOBBY UI FUNCTIONS ==========
         window.createLobby = () => {
-            playerName = document.getElementById('playerName').value;
+            playerName = document.getElementById('playerName').value.trim();
             if (!playerName) { alert('Enter your name!'); return; }
-            socket.emit('create-lobby', { playerName });
+            socket.emit('create-room', { playerName });
         };
         
         window.showJoinMenu = () => {
@@ -411,15 +429,15 @@
         };
         
         window.joinLobby = () => {
-            playerName = document.getElementById('playerName').value;
+            playerName = document.getElementById('playerName').value.trim();
             const code = document.getElementById('lobbyCodeInput').value.toUpperCase();
             if (!playerName || !code) { alert('Enter name and code!'); return; }
-            socket.emit('join-lobby', { playerName, lobbyCode: code });
+            socket.emit('join-room', { playerName, roomCode: code });
         };
         
         window.startGame = () => {
             if (isHost && currentLobby) {
-                socket.emit('start-game', { lobbyCode: currentLobby });
+                socket.emit('start-game', { roomCode: currentLobby });
             }
         };
         
@@ -434,10 +452,10 @@
             scene.background = new THREE.Color(0x050505);
             scene.fog = new THREE.FogExp2(0x050505, 0.002);
             
-            // Camera
+            // Camera - SINGLE FULL SCREEN
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Renderer
+            // Renderer - NO SPLIT SCREEN
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
@@ -549,6 +567,7 @@
                 keys[e.code] = true;
                 if (e.code === 'KeyQ' || e.code === 'KeyE') {
                     camMode = camMode === 'car' ? 'ball' : 'car';
+                    document.getElementById('camIndicator').innerHTML = camMode === 'car' ? '🎥 Car Cam (Q/E)' : '🎥 Ball Cam (Q/E)';
                 }
             });
             window.addEventListener('keyup', (e) => keys[e.code] = false);
@@ -659,11 +678,11 @@
                     if (ball.position.z < 0) {
                         scoreBlue++;
                         document.getElementById('scoreBlue').innerText = scoreBlue;
-                        socket.emit('goal-scored', { lobbyCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
+                        socket.emit('goal', { roomCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
                     } else {
                         scoreOrange++;
                         document.getElementById('scoreOrange').innerText = scoreOrange;
-                        socket.emit('goal-scored', { lobbyCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
+                        socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
                     resetBall();
                 } else {
@@ -672,7 +691,7 @@
                 }
             }
             
-            // Car collision
+            // Car collision - MY CAR hits ball
             if (myCar.position.distanceTo(ball.position) < 2.3) {
                 const hitDir = ball.position.clone().sub(myCar.position).normalize();
                 const hitPower = Math.abs(myVel.z) * 0.8 + 0.3;
@@ -687,7 +706,6 @@
             const goalPopup = document.getElementById('goal-popup');
             goalPopup.style.display = 'block';
             setTimeout(() => goalPopup.style.display = 'none', 1500);
-            socket.emit('ball-reset', { lobbyCode: currentLobby, position: { x: 0, y: 5, z: 0 }, velocity: { x: 0, y: 0, z: 0 } });
         }
         
         function updateCamera() {
@@ -715,7 +733,7 @@
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
                 socket.emit('game-update', {
-                    lobbyCode: currentLobby,
+                    roomCode: currentLobby,
                     car: {
                         x: myCar.position.x, y: myCar.position.y, z: myCar.position.z,
                         rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
@@ -734,7 +752,7 @@
             if (!scene) return;
             requestAnimationFrame(animate);
             
-            if (!isResetting) {
+            if (!isResetting && myCar) {
                 updateMyCar();
                 updateBall();
                 updateCamera();
