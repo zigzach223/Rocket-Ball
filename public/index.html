@@ -3,135 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rocket-Ball - Online Multiplayer</title>
+    <title>Rocket League - Online Multiplayer</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Arial', sans-serif; background: #000; overflow: hidden; }
-        
-        /* Lobby Screen */
-        .lobby-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0a0a1a, #0a0a2a);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        
-        .lobby-container {
-            background: rgba(20,20,40,0.95);
-            border-radius: 20px;
-            padding: 40px;
-            min-width: 450px;
-            text-align: center;
-            border: 2px solid #ffaa44;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5);
-        }
-        
-        h1 { color: #ffaa44; margin-bottom: 10px; font-size: 32px; }
-        .subtitle { color: #88aaff; margin-bottom: 30px; font-size: 14px; }
-        
-        input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid #ffaa44;
-            border-radius: 8px;
-            color: white;
-            font-size: 16px;
-        }
-        
-        button {
-            background: linear-gradient(135deg, #ffaa44, #ff8844);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            margin: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: transform 0.2s;
-        }
-        
-        button:hover { transform: scale(1.05); }
-        
-        .player-list {
-            margin: 20px 0;
-            padding: 20px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 10px;
-        }
-        
-        .player-item {
-            padding: 10px;
-            margin: 8px 0;
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .lobby-code {
-            font-size: 32px;
-            font-family: monospace;
-            background: rgba(0,0,0,0.7);
-            padding: 15px;
-            border-radius: 10px;
-            letter-spacing: 4px;
-            margin: 20px 0;
-            color: #ffaa44;
-        }
-        
-        .hidden { display: none; }
-        
-        .status-text { color: #88ff88; margin: 10px 0; }
-        .error-text { color: #ff4444; margin: 10px 0; }
-        
-        /* Game UI */
-        #gameUI {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            pointer-events: none;
-            z-index: 10;
-            text-align: center;
-        }
-        
-        .score-board {
-            font-size: 48px;
-            font-weight: bold;
-            background: rgba(0,0,0,0.7);
-            padding: 10px 30px;
-            border-radius: 15px;
-            backdrop-filter: blur(5px);
-        }
-        
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: white; pointer-events: none; z-index: 10; text-align: center; width: 100%; }
+        .score-board { font-size: 32px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 15px; display: inline-block; }
         .blue { color: #0088ff; }
         .orange { color: #ff8800; }
-        
-        .controls-hint {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            background: rgba(0,0,0,0.6);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            white-space: nowrap;
-            pointer-events: none;
-            z-index: 10;
+        .controls-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
+        #goal-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 80px; font-weight: bold; text-shadow: 0 0 20px #fff; display: none; z-index: 100; animation: pulse 0.5s; }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
-        
         .connection-status {
             position: absolute;
             top: 20px;
@@ -144,27 +29,6 @@
             font-family: monospace;
             z-index: 10;
         }
-        
-        #goal-popup {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 80px;
-            font-weight: bold;
-            text-shadow: 0 0 20px #fff;
-            display: none;
-            z-index: 100;
-            animation: pulse 0.5s;
-        }
-        
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-        }
-        
         .boost-bar {
             position: absolute;
             bottom: 30px;
@@ -176,28 +40,23 @@
             overflow: hidden;
             z-index: 10;
         }
-        
         .boost-fill {
             height: 100%;
             background: linear-gradient(90deg, #44ff44, #88ff88);
             width: 100%;
             transition: width 0.1s;
-            border-radius: 10px;
         }
-        
         .boost-label {
             position: absolute;
             bottom: 55px;
             left: 20px;
             color: white;
             font-size: 10px;
-            font-family: monospace;
-            z-index: 10;
             background: rgba(0,0,0,0.5);
             padding: 2px 8px;
             border-radius: 5px;
+            z-index: 10;
         }
-        
         .speedometer {
             position: absolute;
             bottom: 30px;
@@ -210,7 +69,6 @@
             font-family: monospace;
             z-index: 10;
         }
-        
         .camera-indicator {
             position: absolute;
             top: 100px;
@@ -220,20 +78,85 @@
             padding: 5px 10px;
             border-radius: 5px;
             font-size: 12px;
-            font-family: monospace;
             z-index: 10;
         }
+        .lobby-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a, #0a0a2a);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .lobby-container {
+            background: rgba(20,20,40,0.95);
+            border-radius: 20px;
+            padding: 40px;
+            min-width: 400px;
+            text-align: center;
+            border: 2px solid #ffaa44;
+        }
+        h1 { color: #ffaa44; margin-bottom: 20px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #ffaa44;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+        }
+        button {
+            background: #ffaa44;
+            color: black;
+            border: none;
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover { transform: scale(1.05); }
+        .player-list {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+        }
+        .player-item {
+            padding: 10px;
+            margin: 5px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+        .lobby-code {
+            font-size: 32px;
+            font-family: monospace;
+            background: black;
+            padding: 15px;
+            margin: 20px 0;
+            color: #ffaa44;
+        }
+        .hidden { display: none; }
+        .status-text { color: #88ff88; margin: 10px 0; }
+        .error-text { color: #ff4444; margin: 10px 0; }
     </style>
 </head>
 <body>
     <!-- LOBBY SCREEN -->
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
-            <h1>🏎️ ROCKET-BALL 🚗</h1>
-            <div class="subtitle">Online Multiplayer - Full Screen!</div>
+            <h1>🏎️ ROCKET LEAGUE 🚗</h1>
+            <div class="subtitle">Online Multiplayer</div>
             
             <div id="mainMenu">
-                <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+                <input type="text" id="playerName" placeholder="Enter your name">
                 <div>
                     <button onclick="createLobby()">🏠 Create Lobby (Blue Car)</button>
                     <button onclick="showJoinMenu()">🔑 Join Lobby (Orange Car)</button>
@@ -258,18 +181,18 @@
                     <button onclick="startGame()">🎮 Start Game!</button>
                 </div>
                 <div id="waitingText" class="status-text">⏳ Waiting for host to start...</div>
-                <button onclick="leaveLobby()">🚪 Leave Lobby</button>
+                <button onclick="leaveLobby()">🚪 Leave</button>
             </div>
         </div>
     </div>
     
     <!-- GAME CONTAINER -->
     <div id="gameContainer" style="display: none;">
-        <div id="gameUI">
+        <div id="ui">
             <div class="score-board">
-                <span class="blue">🔵 BLUE: <span id="scoreBlue">0</span></span>
-                <span style="margin: 0 20px;">|</span>
-                <span class="orange">🟠 ORANGE: <span id="scoreOrange">0</span></span>
+                <span class="blue">BLUE: <span id="scoreBlue">0</span></span>
+                <span style="margin: 0 20px;">-</span>
+                <span class="orange">ORANGE: <span id="scoreOrange">0</span></span>
             </div>
         </div>
         <div class="boost-label">💨 BOOST</div>
@@ -293,14 +216,14 @@
     <script type="module">
         import * as THREE from 'three';
         
-        // ========== SOCKET.IO ==========
+        // Socket.IO
         const socket = io();
         let currentLobby = null;
         let isHost = false;
         let playerName = '';
         let amIBlue = true;
         
-        // ========== GAME VARIABLES ==========
+        // Game variables
         let scene, camera, renderer;
         let myCar, opponentCar, ball;
         let myVel, opponentVel, ballVel;
@@ -312,7 +235,7 @@
         let lastSendTime = 0;
         const SEND_RATE = 1000 / 30;
         
-        // Physics constants (YOUR EXACT VALUES)
+        // Physics constants
         const MAX_NORMAL_SPEED = 0.2;
         const MAX_BOOST_SPEED = 0.3;
         const ACCEL = 0.018;
@@ -322,13 +245,11 @@
         const JUMP_FORCE = 0.18;
         const GRAVITY = 0.010;
         
-        // Keys
         const keys = {};
         
-        // ========== SOCKET EVENT HANDLERS ==========
+        // Socket events
         socket.on('connect', () => {
             document.getElementById('connStatus').innerHTML = '✅ Connected';
-            console.log('Connected to server!');
         });
         
         socket.on('lobby-created', (data) => {
@@ -342,7 +263,6 @@
             document.getElementById('waitingRoom').classList.remove('hidden');
             document.getElementById('hostControls').classList.remove('hidden');
             document.getElementById('waitingText').style.display = 'none';
-            console.log('Lobby created:', data.code);
         });
         
         socket.on('room-joined', (data) => {
@@ -355,7 +275,6 @@
             document.getElementById('waitingRoom').classList.remove('hidden');
             document.getElementById('hostControls').classList.add('hidden');
             document.getElementById('waitingText').style.display = 'block';
-            console.log('Joined lobby:', data.roomCode);
         });
         
         socket.on('player-joined', (data) => {
@@ -366,7 +285,6 @@
             document.getElementById('lobbyScreen').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'block';
             initGame();
-            console.log('Game starting!');
         });
         
         socket.on('game-update', (data) => {
@@ -375,7 +293,6 @@
                 opponentCar.position.z = data.car.z;
                 opponentCar.position.y = data.car.y;
                 opponentCar.rotation.y = data.car.rot;
-                opponentVel = new THREE.Vector3(data.car.vx || 0, data.car.vy || 0, data.car.vz || 0);
             }
             if (data.ball && ball) {
                 ball.position.x = data.ball.x;
@@ -411,7 +328,6 @@
             document.getElementById('playerList').innerHTML = list;
         }
         
-        // ========== LOBBY UI FUNCTIONS ==========
         window.createLobby = () => {
             playerName = document.getElementById('playerName').value.trim();
             if (!playerName) { alert('Enter your name!'); return; }
@@ -445,23 +361,18 @@
             location.reload();
         };
         
-        // ========== 3D GAME INITIALIZATION ==========
         function initGame() {
-            // Setup scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x050505);
             scene.fog = new THREE.FogExp2(0x050505, 0.002);
             
-            // Camera - SINGLE FULL SCREEN
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Renderer - NO SPLIT SCREEN
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
             
-            // Lighting
             scene.add(new THREE.AmbientLight(0xffffff, 0.5));
             const light = new THREE.DirectionalLight(0xffffff, 1);
             light.position.set(20, 40, 20);
@@ -471,7 +382,6 @@
             fillLight.position.set(0, 20, 0);
             scene.add(fillLight);
             
-            // Arena
             const ARENA_W = 80, ARENA_D = 120;
             const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_W, ARENA_D), new THREE.MeshPhongMaterial({ color: 0x113311 }));
             floor.rotation.x = -Math.PI / 2;
@@ -482,14 +392,12 @@
             gridHelper.position.y = 0.01;
             scene.add(gridHelper);
             
-            // Center circle
             const circleMat = new THREE.MeshPhongMaterial({ color: 0x338833, emissive: 0x114411 });
             const centerCircle = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 0.05, 32), circleMat);
             centerCircle.position.set(0, 0, 0);
             centerCircle.rotation.x = Math.PI / 2;
             scene.add(centerCircle);
             
-            // Create car function
             function createCar(color, position, rotation) {
                 const group = new THREE.Group();
                 const bodyMat = new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
@@ -523,7 +431,6 @@
                 return group;
             }
             
-            // Create cars based on player role
             if (amIBlue) {
                 myCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
                 opponentCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
@@ -539,14 +446,11 @@
             scene.add(myCar);
             scene.add(opponentCar);
             
-            // Ball
-            const ballMat = new THREE.MeshPhongMaterial({ color: 0xffaa66, emissive: 0x442200 });
-            ball = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), ballMat);
+            ball = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshPhongMaterial({ color: 0xffaa66, emissive: 0x442200 }));
             ball.position.set(0, 1.2, 0);
             ball.castShadow = true;
             scene.add(ball);
             
-            // Goals
             const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.7 });
             const goalBlueObj = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 0.5), goalBlueMat);
             goalBlueObj.position.set(0, 3, 60);
@@ -557,12 +461,10 @@
             goalOrangeObj.position.set(0, 3, -60);
             scene.add(goalOrangeObj);
             
-            // Physics variables
             myVel = new THREE.Vector3();
             opponentVel = new THREE.Vector3();
             ballVel = new THREE.Vector3();
             
-            // Keyboard controls
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
                 if (e.code === 'KeyQ' || e.code === 'KeyE') {
@@ -572,11 +474,9 @@
             });
             window.addEventListener('keyup', (e) => keys[e.code] = false);
             
-            // Start game loop
             animate();
         }
         
-        // ========== GAME PHYSICS ==========
         function updateMyCar() {
             const isBoosting = keys['ShiftLeft'] && myBoost > 0;
             
@@ -646,11 +546,9 @@
                 myVel.y = 0;
             }
             
-            // Boundaries
             myCar.position.x = THREE.MathUtils.clamp(myCar.position.x, -38, 38);
             myCar.position.z = THREE.MathUtils.clamp(myCar.position.z, -58, 58);
             
-            // Speedometer
             const speedKmh = Math.abs(myVel.z * 70).toFixed(0);
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
@@ -684,28 +582,23 @@
                         document.getElementById('scoreOrange').innerText = scoreOrange;
                         socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
-                    resetBall();
+                    ball.position.set(0, 5, 0);
+                    ballVel.set(0, 0, 0);
+                    const goalPopup = document.getElementById('goal-popup');
+                    goalPopup.style.display = 'block';
+                    setTimeout(() => goalPopup.style.display = 'none', 1500);
                 } else {
                     ballVel.z *= -0.65;
                     ball.position.z = Math.sign(ball.position.z) * 59;
                 }
             }
             
-            // Car collision - MY CAR hits ball
             if (myCar.position.distanceTo(ball.position) < 2.3) {
                 const hitDir = ball.position.clone().sub(myCar.position).normalize();
                 const hitPower = Math.abs(myVel.z) * 0.8 + 0.3;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += 0.12;
             }
-        }
-        
-        function resetBall() {
-            ball.position.set(0, 5, 0);
-            ballVel.set(0, 0, 0);
-            const goalPopup = document.getElementById('goal-popup');
-            goalPopup.style.display = 'block';
-            setTimeout(() => goalPopup.style.display = 'none', 1500);
         }
         
         function updateCamera() {
@@ -747,12 +640,11 @@
             }
         }
         
-        // ========== ANIMATION LOOP ==========
         function animate() {
             if (!scene) return;
             requestAnimationFrame(animate);
             
-            if (!isResetting && myCar) {
+            if (myCar) {
                 updateMyCar();
                 updateBall();
                 updateCamera();
