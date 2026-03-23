@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rocket-Ball - Online Multiplayer</title>
+    <title>Rocket-Ball - Online Multiplayer 3D Game</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #000; overflow: hidden; }
+        body { font-family: 'Arial', sans-serif; background: #000; overflow: hidden; }
         
+        /* Lobby Screen */
         .lobby-screen {
             position: fixed;
             top: 0;
@@ -18,18 +19,21 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            z-index: 1000;
         }
         
         .lobby-container {
             background: rgba(20,20,40,0.95);
             border-radius: 20px;
             padding: 40px;
-            min-width: 400px;
+            min-width: 450px;
             text-align: center;
             border: 2px solid #ffaa44;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
         
-        h1 { color: #ffaa44; margin-bottom: 20px; }
+        h1 { color: #ffaa44; margin-bottom: 10px; font-size: 32px; }
+        .subtitle { color: #88aaff; margin-bottom: 30px; font-size: 14px; }
         
         input {
             width: 100%;
@@ -43,8 +47,8 @@
         }
         
         button {
-            background: #ffaa44;
-            color: black;
+            background: linear-gradient(135deg, #ffaa44, #ff8844);
+            color: white;
             border: none;
             padding: 12px 24px;
             margin: 10px;
@@ -52,6 +56,7 @@
             cursor: pointer;
             font-size: 16px;
             font-weight: bold;
+            transition: transform 0.2s;
         }
         
         button:hover { transform: scale(1.05); }
@@ -65,28 +70,38 @@
         
         .player-item {
             padding: 10px;
-            margin: 5px;
+            margin: 8px 0;
             background: rgba(255,255,255,0.1);
-            border-radius: 5px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
         }
         
         .lobby-code {
             font-size: 32px;
             font-family: monospace;
-            background: black;
+            background: rgba(0,0,0,0.7);
             padding: 15px;
+            border-radius: 10px;
+            letter-spacing: 4px;
             margin: 20px 0;
             color: #ffaa44;
         }
         
         .hidden { display: none; }
         
+        .status-text { color: #88ff88; margin: 10px 0; }
+        .error-text { color: #ff4444; margin: 10px 0; }
+        
+        /* Game UI */
         #gameUI {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
             color: white;
+            pointer-events: none;
+            z-index: 10;
             text-align: center;
         }
         
@@ -96,6 +111,7 @@
             background: rgba(0,0,0,0.7);
             padding: 10px 30px;
             border-radius: 15px;
+            backdrop-filter: blur(5px);
         }
         
         .blue { color: #0088ff; }
@@ -111,33 +127,103 @@
             padding: 8px 16px;
             border-radius: 8px;
             font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
         }
         
         .connection-status {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: black;
+            background: rgba(0,0,0,0.7);
             padding: 5px 10px;
             border-radius: 5px;
-            color: #88ff88;
             font-size: 12px;
+            color: #88ff88;
+            font-family: monospace;
+            z-index: 10;
         }
         
-        .error-text { color: #ff4444; margin: 10px 0; }
-        .status-text { color: #88ff88; margin: 10px 0; }
+        #goal-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 80px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #fff;
+            display: none;
+            z-index: 100;
+            animation: pulse 0.5s;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        
+        .boost-bar {
+            position: absolute;
+            bottom: 30px;
+            left: 20px;
+            width: 200px;
+            height: 20px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 10;
+        }
+        
+        .boost-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #44ff44, #88ff88);
+            width: 100%;
+            transition: width 0.1s;
+            border-radius: 10px;
+        }
+        
+        .boost-label {
+            position: absolute;
+            bottom: 55px;
+            left: 20px;
+            color: white;
+            font-size: 10px;
+            font-family: monospace;
+            z-index: 10;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 5px;
+        }
+        
+        .speedometer {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #88ff88;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
+    <!-- LOBBY SCREEN -->
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET-BALL 🚗</h1>
+            <div class="subtitle">3D Online Multiplayer</div>
             
             <div id="mainMenu">
-                <input type="text" id="playerName" placeholder="Enter your name">
+                <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
                 <div>
-                    <button onclick="createLobby()">🏠 Create Lobby (Blue)</button>
-                    <button onclick="showJoinMenu()">🔑 Join Lobby (Orange)</button>
+                    <button onclick="createLobby()">🏠 Create Lobby (Blue Car)</button>
+                    <button onclick="showJoinMenu()">🔑 Join Lobby (Orange Car)</button>
                 </div>
             </div>
             
@@ -149,7 +235,7 @@
             </div>
             
             <div id="waitingRoom" class="hidden">
-                <h3>Share this code:</h3>
+                <h3>Share this code with your friend:</h3>
                 <div class="lobby-code" id="lobbyCodeDisplay"></div>
                 <div class="player-list">
                     <h4>👥 Players:</h4>
@@ -158,34 +244,74 @@
                 <div id="hostControls" class="hidden">
                     <button onclick="startGame()">🎮 Start Game!</button>
                 </div>
-                <div id="waitingText" class="status-text">Waiting for host...</div>
-                <button onclick="leaveLobby()">🚪 Leave</button>
+                <div id="waitingText" class="status-text">⏳ Waiting for host to start...</div>
+                <button onclick="leaveLobby()">🚪 Leave Lobby</button>
             </div>
         </div>
     </div>
     
+    <!-- GAME CONTAINER -->
     <div id="gameContainer" style="display: none;">
         <div id="gameUI">
             <div class="score-board">
-                <span class="blue">BLUE: <span id="scoreBlue">0</span></span>
-                <span style="margin:0 20px">|</span>
-                <span class="orange">ORANGE: <span id="scoreOrange">0</span></span>
+                <span class="blue">🔵 BLUE: <span id="scoreBlue">0</span></span>
+                <span style="margin: 0 20px;">|</span>
+                <span class="orange">🟠 ORANGE: <span id="scoreOrange">0</span></span>
             </div>
         </div>
+        <div class="boost-label">💨 BOOST</div>
+        <div class="boost-bar">
+            <div class="boost-fill" id="boostFill"></div>
+        </div>
+        <div class="speedometer" id="speedometer">SPEED: 0 km/h</div>
         <div class="controls-hint">
-            🎮 WASD + SHIFT (Boost) + SPACE (Jump)
+            🎮 WASD + SHIFT (Boost) + SPACE (Jump) | Q/E: Toggle Camera
         </div>
         <div class="connection-status" id="connStatus">🔌 Connecting...</div>
         <div id="goal-popup">⚽ GOAL! ⚽</div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        
+        // ========== SOCKET.IO ==========
         const socket = io();
         let currentLobby = null;
         let isHost = false;
         let playerName = '';
+        let amIBlue = true;
         
+        // ========== GAME VARIABLES ==========
+        let scene, camera, renderer;
+        let myCar, opponentCar, ball;
+        let myVel, opponentVel, ballVel;
+        let myRot = 0, opponentRot = 0;
+        let myBoost = 100;
+        let scoreBlue = 0, scoreOrange = 0;
+        let isResetting = false;
+        let camMode = 'car';
+        let lastSendTime = 0;
+        const SEND_RATE = 1000 / 30;
+        
+        // Physics constants
+        const MAX_NORMAL_SPEED = 1.2;
+        const MAX_BOOST_SPEED = 2.0;
+        const ACCEL = 0.018;
+        const BOOST_ACCEL = 0.042;
+        const TURN_SPEED = 0.028;
+        const FRICTION = 0.97;
+        const JUMP_FORCE = 0.18;
+        const GRAVITY = 0.010;
+        
+        // Keys
+        const keys = {};
+        
+        // ========== SOCKET EVENT HANDLERS ==========
         socket.on('connect', () => {
             document.getElementById('connStatus').innerHTML = '✅ Connected';
         });
@@ -193,6 +319,7 @@
         socket.on('lobby-created', (data) => {
             currentLobby = data.code;
             isHost = true;
+            amIBlue = true;
             document.getElementById('lobbyCodeDisplay').innerText = data.code;
             updatePlayerList(data.players);
             document.getElementById('mainMenu').classList.add('hidden');
@@ -205,6 +332,7 @@
         socket.on('join-success', (data) => {
             currentLobby = data.lobbyCode;
             isHost = false;
+            amIBlue = false;
             updatePlayerList(data.players);
             document.getElementById('mainMenu').classList.add('hidden');
             document.getElementById('joinMenu').classList.add('hidden');
@@ -220,7 +348,39 @@
         socket.on('game-starting', () => {
             document.getElementById('lobbyScreen').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'block';
-            alert('Game starting! Use WASD + SHIFT to boost!');
+            initGame();
+        });
+        
+        socket.on('game-update', (data) => {
+            if (opponentCar) {
+                opponentCar.position.x = data.car.x;
+                opponentCar.position.z = data.car.z;
+                opponentCar.position.y = data.car.y;
+                opponentCar.rotation.y = data.car.rot;
+                opponentVel = new THREE.Vector3(data.car.vx, data.car.vy, data.car.vz);
+            }
+            if (data.ball) {
+                ball.position.x = data.ball.x;
+                ball.position.z = data.ball.z;
+                ball.position.y = data.ball.y;
+                ballVel = new THREE.Vector3(data.ball.vx, data.ball.vy, data.ball.vz);
+            }
+            if (data.score) {
+                scoreBlue = data.score.blue;
+                scoreOrange = data.score.orange;
+                document.getElementById('scoreBlue').innerText = scoreBlue;
+                document.getElementById('scoreOrange').innerText = scoreOrange;
+            }
+        });
+        
+        socket.on('goal', (data) => {
+            scoreBlue = data.score.blue;
+            scoreOrange = data.score.orange;
+            document.getElementById('scoreBlue').innerText = scoreBlue;
+            document.getElementById('scoreOrange').innerText = scoreOrange;
+            const goalPopup = document.getElementById('goal-popup');
+            goalPopup.style.display = 'block';
+            setTimeout(() => goalPopup.style.display = 'none', 1500);
         });
         
         socket.on('join-error', (data) => {
@@ -233,6 +393,7 @@
             document.getElementById('playerList').innerHTML = list;
         }
         
+        // ========== LOBBY UI FUNCTIONS ==========
         window.createLobby = () => {
             playerName = document.getElementById('playerName').value;
             if (!playerName) { alert('Enter your name!'); return; }
@@ -265,6 +426,330 @@
         window.leaveLobby = () => {
             location.reload();
         };
+        
+        // ========== 3D GAME INITIALIZATION ==========
+        function initGame() {
+            // Setup scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.FogExp2(0x050505, 0.002);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(20, 40, 20);
+            light.castShadow = true;
+            scene.add(light);
+            const fillLight = new THREE.PointLight(0x4466ff, 0.3);
+            fillLight.position.set(0, 20, 0);
+            scene.add(fillLight);
+            
+            // Arena
+            const ARENA_W = 80, ARENA_D = 120;
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_W, ARENA_D), new THREE.MeshPhongMaterial({ color: 0x113311 }));
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            const gridHelper = new THREE.GridHelper(ARENA_D, 30, 0x44aa44, 0x226622);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+            
+            // Center circle
+            const circleMat = new THREE.MeshPhongMaterial({ color: 0x338833, emissive: 0x114411 });
+            const centerCircle = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 0.05, 32), circleMat);
+            centerCircle.position.set(0, 0, 0);
+            centerCircle.rotation.x = Math.PI / 2;
+            scene.add(centerCircle);
+            
+            // Create car function
+            function createCar(color, position, rotation) {
+                const group = new THREE.Group();
+                const bodyMat = new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
+                const detailMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+                const wheelMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 2.2), bodyMat);
+                body.castShadow = true;
+                group.add(body);
+                
+                const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.8), detailMat);
+                windshield.position.set(0, 0.25, -0.5);
+                group.add(windshield);
+                
+                const wing = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.5), bodyMat);
+                wing.position.set(0, 0.55, 0.9);
+                group.add(wing);
+                
+                const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 16);
+                const wheelPositions = [[-0.7, -0.1, 0.7], [0.7, -0.1, 0.7], [-0.7, -0.1, -0.7], [0.7, -0.1, -0.7]];
+                wheelPositions.forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                    wheel.rotation.z = Math.PI/2;
+                    wheel.position.set(pos[0], pos[1], pos[2]);
+                    wheel.castShadow = true;
+                    group.add(wheel);
+                });
+                
+                group.position.set(position.x, position.y, position.z);
+                group.rotation.y = rotation;
+                return group;
+            }
+            
+            // Create cars based on player role
+            if (amIBlue) {
+                myCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
+                opponentCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
+                myRot = 0;
+                opponentRot = Math.PI;
+            } else {
+                myCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
+                opponentCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
+                myRot = Math.PI;
+                opponentRot = 0;
+            }
+            
+            scene.add(myCar);
+            scene.add(opponentCar);
+            
+            // Ball
+            const ballMat = new THREE.MeshPhongMaterial({ color: 0xffaa66, emissive: 0x442200 });
+            ball = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), ballMat);
+            ball.position.set(0, 1.2, 0);
+            ball.castShadow = true;
+            scene.add(ball);
+            
+            // Goals
+            const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.7 });
+            const goalBlueObj = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 0.5), goalBlueMat);
+            goalBlueObj.position.set(0, 3, 60);
+            scene.add(goalBlueObj);
+            
+            const goalOrangeMat = new THREE.MeshPhongMaterial({ color: 0xff8844, emissive: 0x442200, transparent: true, opacity: 0.7 });
+            const goalOrangeObj = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 0.5), goalOrangeMat);
+            goalOrangeObj.position.set(0, 3, -60);
+            scene.add(goalOrangeObj);
+            
+            // Physics variables
+            myVel = new THREE.Vector3();
+            opponentVel = new THREE.Vector3();
+            ballVel = new THREE.Vector3();
+            
+            // Keyboard controls
+            window.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                if (e.code === 'KeyQ' || e.code === 'KeyE') {
+                    camMode = camMode === 'car' ? 'ball' : 'car';
+                }
+            });
+            window.addEventListener('keyup', (e) => keys[e.code] = false);
+            
+            // Start game loop
+            animate();
+        }
+        
+        // ========== GAME PHYSICS ==========
+        function updateMyCar() {
+            const isBoosting = keys['ShiftLeft'] && myBoost > 0;
+            
+            if (isBoosting) {
+                myBoost = Math.max(myBoost - 0.8, 0);
+            } else if (myBoost < 100) {
+                myBoost = Math.min(myBoost + 0.25, 100);
+            }
+            
+            document.getElementById('boostFill').style.width = (myBoost) + '%';
+            
+            if (keys['KeyW']) {
+                if (isBoosting) {
+                    if (myVel.z > -MAX_BOOST_SPEED) {
+                        myVel.z = Math.max(myVel.z - BOOST_ACCEL, -MAX_BOOST_SPEED);
+                    }
+                } else {
+                    if (myVel.z > -MAX_NORMAL_SPEED) {
+                        myVel.z = Math.max(myVel.z - ACCEL, -MAX_NORMAL_SPEED);
+                    } else if (myVel.z < -MAX_NORMAL_SPEED) {
+                        myVel.z = Math.min(myVel.z + ACCEL, -MAX_NORMAL_SPEED);
+                    }
+                }
+            }
+            
+            if (keys['KeyS']) {
+                if (isBoosting) {
+                    if (myVel.z < MAX_BOOST_SPEED) {
+                        myVel.z = Math.min(myVel.z + BOOST_ACCEL, MAX_BOOST_SPEED);
+                    }
+                } else {
+                    if (myVel.z < MAX_NORMAL_SPEED) {
+                        myVel.z = Math.min(myVel.z + ACCEL, MAX_NORMAL_SPEED);
+                    } else if (myVel.z > MAX_NORMAL_SPEED) {
+                        myVel.z = Math.max(myVel.z - ACCEL, MAX_NORMAL_SPEED);
+                    }
+                }
+            }
+            
+            if (!keys['KeyW'] && !keys['KeyS']) {
+                myVel.z *= FRICTION;
+            }
+            
+            let turnMultiplier = 1 - (Math.abs(myVel.z) / MAX_BOOST_SPEED) * 0.4;
+            turnMultiplier = Math.max(turnMultiplier, 0.6);
+            
+            if (keys['KeyA']) {
+                myRot += TURN_SPEED * turnMultiplier;
+            }
+            if (keys['KeyD']) {
+                myRot -= TURN_SPEED * turnMultiplier;
+            }
+            
+            if (keys['Space'] && myCar.position.y <= 0.41) {
+                myVel.y = JUMP_FORCE;
+            }
+            
+            myCar.rotation.y = myRot;
+            const moveDir = new THREE.Vector3(0, 0, myVel.z).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
+            myCar.position.add(moveDir);
+            
+            myCar.position.y += myVel.y;
+            if (myCar.position.y > 0.4) {
+                myVel.y -= GRAVITY;
+            } else {
+                myCar.position.y = 0.4;
+                myVel.y = 0;
+            }
+            
+            // Boundaries
+            myCar.position.x = THREE.MathUtils.clamp(myCar.position.x, -38, 38);
+            myCar.position.z = THREE.MathUtils.clamp(myCar.position.z, -58, 58);
+            
+            // Speedometer
+            const speedKmh = Math.abs(myVel.z * 70).toFixed(0);
+            document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
+        }
+        
+        function updateBall() {
+            ball.position.add(ballVel);
+            ballVel.multiplyScalar(0.995);
+            
+            if (ball.position.y > 1.2) {
+                ballVel.y -= 0.006;
+            } else {
+                ball.position.y = 1.2;
+                ballVel.y *= -0.65;
+                ballVel.x *= 0.98;
+                ballVel.z *= 0.98;
+            }
+            
+            if (Math.abs(ball.position.x) > 39) {
+                ballVel.x *= -0.7;
+                ball.position.x = Math.sign(ball.position.x) * 39;
+            }
+            
+            if (Math.abs(ball.position.z) > 59) {
+                if (Math.abs(ball.position.x) < 7.5 && ball.position.y < 6.5) {
+                    if (ball.position.z < 0) {
+                        scoreBlue++;
+                        document.getElementById('scoreBlue').innerText = scoreBlue;
+                        socket.emit('goal-scored', { lobbyCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
+                    } else {
+                        scoreOrange++;
+                        document.getElementById('scoreOrange').innerText = scoreOrange;
+                        socket.emit('goal-scored', { lobbyCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
+                    }
+                    resetBall();
+                } else {
+                    ballVel.z *= -0.65;
+                    ball.position.z = Math.sign(ball.position.z) * 59;
+                }
+            }
+            
+            // Car collision
+            if (myCar.position.distanceTo(ball.position) < 2.3) {
+                const hitDir = ball.position.clone().sub(myCar.position).normalize();
+                const hitPower = Math.abs(myVel.z) * 0.8 + 0.3;
+                ballVel.add(hitDir.multiplyScalar(hitPower));
+                ballVel.y += 0.12;
+            }
+        }
+        
+        function resetBall() {
+            ball.position.set(0, 5, 0);
+            ballVel.set(0, 0, 0);
+            const goalPopup = document.getElementById('goal-popup');
+            goalPopup.style.display = 'block';
+            setTimeout(() => goalPopup.style.display = 'none', 1500);
+            socket.emit('ball-reset', { lobbyCode: currentLobby, position: { x: 0, y: 5, z: 0 }, velocity: { x: 0, y: 0, z: 0 } });
+        }
+        
+        function updateCamera() {
+            if (camMode === 'car') {
+                const speed = Math.abs(myVel.z);
+                const speedFactor = Math.min(speed / 1.2, 0.5);
+                const distance = 8 + (speedFactor * 2.5);
+                const height = 4.2 + (speedFactor * 0.8);
+                const cameraOffset = new THREE.Vector3(0, height, distance).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
+                camera.position.copy(myCar.position.clone().add(cameraOffset));
+                const lookOffset = new THREE.Vector3(0, 1, -7).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
+                camera.lookAt(myCar.position.clone().add(lookOffset));
+            } else {
+                const toBall = new THREE.Vector3().subVectors(ball.position, myCar.position).normalize();
+                const cameraDistance = 9;
+                const cameraOffset = toBall.clone().multiplyScalar(-cameraDistance);
+                cameraOffset.y += 3.5;
+                camera.position.copy(myCar.position.clone().add(cameraOffset));
+                camera.lookAt(ball.position);
+            }
+        }
+        
+        function sendGameUpdate() {
+            const now = Date.now();
+            if (now - lastSendTime > SEND_RATE && currentLobby) {
+                lastSendTime = now;
+                socket.emit('game-update', {
+                    lobbyCode: currentLobby,
+                    car: {
+                        x: myCar.position.x, y: myCar.position.y, z: myCar.position.z,
+                        rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
+                    },
+                    ball: {
+                        x: ball.position.x, y: ball.position.y, z: ball.position.z,
+                        vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
+                    },
+                    score: { blue: scoreBlue, orange: scoreOrange }
+                });
+            }
+        }
+        
+        // ========== ANIMATION LOOP ==========
+        function animate() {
+            if (!scene) return;
+            requestAnimationFrame(animate);
+            
+            if (!isResetting) {
+                updateMyCar();
+                updateBall();
+                updateCamera();
+                sendGameUpdate();
+                renderer.render(scene, camera);
+            }
+        }
+        
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
     </script>
 </body>
 </html>
