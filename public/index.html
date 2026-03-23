@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rocket-Ball - Online Multiplayer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #000; overflow: hidden; }
+        
+        .lobby-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a, #0a0a2a);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .lobby-container {
+            background: rgba(20,20,40,0.95);
+            border-radius: 20px;
+            padding: 40px;
+            min-width: 400px;
+            text-align: center;
+            border: 2px solid #ffaa44;
+        }
+        
+        h1 { color: #ffaa44; margin-bottom: 20px; }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #ffaa44;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+        }
+        
+        button {
+            background: #ffaa44;
+            color: black;
+            border: none;
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        button:hover { transform: scale(1.05); }
+        
+        .player-list {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+        }
+        
+        .player-item {
+            padding: 10px;
+            margin: 5px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+        
+        .lobby-code {
+            font-size: 32px;
+            font-family: monospace;
+            background: black;
+            padding: 15px;
+            margin: 20px 0;
+            color: #ffaa44;
+        }
+        
+        .hidden { display: none; }
+        
+        #gameUI {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+        }
+        
+        .score-board {
+            font-size: 48px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 30px;
+            border-radius: 15px;
+        }
+        
+        .blue { color: #0088ff; }
+        .orange { color: #ff8800; }
+        
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+        
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: black;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: #88ff88;
+            font-size: 12px;
+        }
+        
+        .error-text { color: #ff4444; margin: 10px 0; }
+        .status-text { color: #88ff88; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div id="lobbyScreen" class="lobby-screen">
+        <div class="lobby-container">
+            <h1>🏎️ ROCKET-BALL 🚗</h1>
+            
+            <div id="mainMenu">
+                <input type="text" id="playerName" placeholder="Enter your name">
+                <div>
+                    <button onclick="createLobby()">🏠 Create Lobby (Blue)</button>
+                    <button onclick="showJoinMenu()">🔑 Join Lobby (Orange)</button>
+                </div>
+            </div>
+            
+            <div id="joinMenu" class="hidden">
+                <input type="text" id="lobbyCodeInput" placeholder="Enter 6-digit code">
+                <div id="joinError" class="error-text"></div>
+                <button onclick="joinLobby()">Join</button>
+                <button onclick="hideJoinMenu()">Back</button>
+            </div>
+            
+            <div id="waitingRoom" class="hidden">
+                <h3>Share this code:</h3>
+                <div class="lobby-code" id="lobbyCodeDisplay"></div>
+                <div class="player-list">
+                    <h4>👥 Players:</h4>
+                    <div id="playerList"></div>
+                </div>
+                <div id="hostControls" class="hidden">
+                    <button onclick="startGame()">🎮 Start Game!</button>
+                </div>
+                <div id="waitingText" class="status-text">Waiting for host...</div>
+                <button onclick="leaveLobby()">🚪 Leave</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gameContainer" style="display: none;">
+        <div id="gameUI">
+            <div class="score-board">
+                <span class="blue">BLUE: <span id="scoreBlue">0</span></span>
+                <span style="margin:0 20px">|</span>
+                <span class="orange">ORANGE: <span id="scoreOrange">0</span></span>
+            </div>
+        </div>
+        <div class="controls-hint">
+            🎮 WASD + SHIFT (Boost) + SPACE (Jump)
+        </div>
+        <div class="connection-status" id="connStatus">🔌 Connecting...</div>
+        <div id="goal-popup">⚽ GOAL! ⚽</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentLobby = null;
+        let isHost = false;
+        let playerName = '';
+        
+        socket.on('connect', () => {
+            document.getElementById('connStatus').innerHTML = '✅ Connected';
+        });
+        
+        socket.on('lobby-created', (data) => {
+            currentLobby = data.code;
+            isHost = true;
+            document.getElementById('lobbyCodeDisplay').innerText = data.code;
+            updatePlayerList(data.players);
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('joinMenu').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.remove('hidden');
+            document.getElementById('hostControls').classList.remove('hidden');
+            document.getElementById('waitingText').style.display = 'none';
+        });
+        
+        socket.on('join-success', (data) => {
+            currentLobby = data.lobbyCode;
+            isHost = false;
+            updatePlayerList(data.players);
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('joinMenu').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.remove('hidden');
+            document.getElementById('hostControls').classList.add('hidden');
+            document.getElementById('waitingText').style.display = 'block';
+        });
+        
+        socket.on('player-joined', (data) => {
+            updatePlayerList(data.players);
+        });
+        
+        socket.on('game-starting', () => {
+            document.getElementById('lobbyScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            alert('Game starting! Use WASD + SHIFT to boost!');
+        });
+        
+        socket.on('join-error', (data) => {
+            document.getElementById('joinError').innerText = data.message;
+            setTimeout(() => document.getElementById('joinError').innerText = '', 3000);
+        });
+        
+        function updatePlayerList(players) {
+            const list = players.map(p => `<div class="player-item">${p.name} ${p.carColor === 'blue' ? '🔵' : '🟠'}</div>`).join('');
+            document.getElementById('playerList').innerHTML = list;
+        }
+        
+        window.createLobby = () => {
+            playerName = document.getElementById('playerName').value;
+            if (!playerName) { alert('Enter your name!'); return; }
+            socket.emit('create-lobby', { playerName });
+        };
+        
+        window.showJoinMenu = () => {
+            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('joinMenu').classList.remove('hidden');
+        };
+        
+        window.hideJoinMenu = () => {
+            document.getElementById('mainMenu').classList.remove('hidden');
+            document.getElementById('joinMenu').classList.add('hidden');
+        };
+        
+        window.joinLobby = () => {
+            playerName = document.getElementById('playerName').value;
+            const code = document.getElementById('lobbyCodeInput').value.toUpperCase();
+            if (!playerName || !code) { alert('Enter name and code!'); return; }
+            socket.emit('join-lobby', { playerName, lobbyCode: code });
+        };
+        
+        window.startGame = () => {
+            if (isHost && currentLobby) {
+                socket.emit('start-game', { lobbyCode: currentLobby });
+            }
+        };
+        
+        window.leaveLobby = () => {
+            location.reload();
+        };
+    </script>
+</body>
+</html>
