@@ -234,9 +234,13 @@
         let ballPos = new THREE.Vector3(0, 1.2, 0);
         let ballVel = new THREE.Vector3(0, 0, 0);
         
+        // Opponent position received from network
+        let opponentPos = new THREE.Vector3(0, 0.4, -45);
+        let opponentRotVal = Math.PI;
+        
         // Physics constants
-        const MAX_NORMAL_SPEED = 0.15;
-        const MAX_BOOST_SPEED = 0.25;
+        const MAX_NORMAL_SPEED = 0.1;
+        const MAX_BOOST_SPEED = 0.15;
         const ACCEL = 0.018;
         const BOOST_ACCEL = 0.042;
         const TURN_SPEED = 0.028;
@@ -293,25 +297,29 @@
             initGame();
         });
         
-        // Receive BOTH players' car updates and ball updates
-        socket.on('game-update', (data) => {
-            // Update opponent car position (from the other player)
-            if (opponentCar && data.car) {
-                opponentCar.position.x = data.car.x;
-                opponentCar.position.z = data.car.z;
-                opponentCar.position.y = data.car.y;
-                opponentCar.rotation.y = data.car.rot;
+        // Receive opponent's car position
+        socket.on('opponent-update', (data) => {
+            if (data.car) {
+                opponentPos.x = data.car.x;
+                opponentPos.z = data.car.z;
+                opponentPos.y = data.car.y;
+                opponentRotVal = data.car.rot;
+                if (opponentCar) {
+                    opponentCar.position.copy(opponentPos);
+                    opponentCar.rotation.y = opponentRotVal;
+                }
             }
-            
-            // ALWAYS use ball position from host (only host updates ball)
-            if (isHost === false && data.ball && ball) {
+        });
+        
+        // Receive ball update from host
+        socket.on('ball-update', (data) => {
+            if (!isHost && data.ball) {
                 ballPos.x = data.ball.x;
                 ballPos.z = data.ball.z;
                 ballPos.y = data.ball.y;
-                ball.position.copy(ballPos);
+                if (ball) ball.position.copy(ballPos);
                 ballVel = new THREE.Vector3(data.ball.vx || 0, data.ball.vy || 0, data.ball.vz || 0);
             }
-            
             if (data.score) {
                 scoreBlue = data.score.blue;
                 scoreOrange = data.score.orange;
@@ -439,14 +447,12 @@
             
             if (amIBlue) {
                 myCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
-                opponentCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
+                opponentCar = createCar(0xffaa66, opponentPos, opponentRotVal);
                 myRot = 0;
-                opponentRot = Math.PI;
             } else {
                 myCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
-                opponentCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
+                opponentCar = createCar(0x88aaff, opponentPos, opponentRotVal);
                 myRot = Math.PI;
-                opponentRot = 0;
             }
             
             scene.add(myCar);
@@ -609,10 +615,10 @@
                 ballVel.y += BALL_Y_BOOST;
             }
             
-            // Car-ball collision for OPPONENT CAR (using opponent's position from network)
+            // Car-ball collision for OPPONENT CAR (using opponent position from network)
             if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
-                // Use opponent's velocity (stored from network)
+                // Estimate opponent speed from position changes (simplified)
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
                 const hitPower = opponentSpeed * BALL_HIT_POWER + 0.2;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
@@ -621,17 +627,6 @@
             
             // Update ball visual
             ball.position.copy(ballPos);
-        }
-        
-        // Update opponent's velocity from their position changes
-        let lastOpponentPos = new THREE.Vector3();
-        function updateOpponentVelocity() {
-            if (opponentCar) {
-                if (lastOpponentPos.x !== 0 || lastOpponentPos.y !== 0 || lastOpponentPos.z !== 0) {
-                    opponentVel = opponentCar.position.clone().sub(lastOpponentPos);
-                }
-                lastOpponentPos.copy(opponentCar.position);
-            }
         }
         
         function updateCamera() {
@@ -654,22 +649,31 @@
             }
         }
         
-        function sendGameUpdate() {
+        function sendUpdates() {
             const now = Date.now();
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
-                socket.emit('game-update', {
+                
+                // Send my car position to opponent
+                socket.emit('opponent-update', {
                     roomCode: currentLobby,
                     car: {
                         x: myCar.position.x, y: myCar.position.y, z: myCar.position.z,
                         rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
-                    },
-                    ball: isHost ? {
-                        x: ballPos.x, y: ballPos.y, z: ballPos.z,
-                        vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
-                    } : null,
-                    score: { blue: scoreBlue, orange: scoreOrange }
+                    }
                 });
+                
+                // If I'm host, send ball position too
+                if (isHost) {
+                    socket.emit('ball-update', {
+                        roomCode: currentLobby,
+                        ball: {
+                            x: ballPos.x, y: ballPos.y, z: ballPos.z,
+                            vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
+                        },
+                        score: { blue: scoreBlue, orange: scoreOrange }
+                    });
+                }
             }
         }
         
@@ -679,19 +683,19 @@
             
             if (myCar) {
                 updateMyCar();
-                updateOpponentVelocity();
                 
                 if (isHost) {
                     updateBallHost();
-                    sendGameUpdate();
-                } else {
-                    // Non-host: just update ball visual from received data
-                    if (ball) ball.position.copy(ballPos);
-                    // Non-host also sends their car position
-                    sendGameUpdate();
+                }
+                
+                // Update opponent car visual from received position
+                if (opponentCar) {
+                    opponentCar.position.lerp(opponentPos, 0.3);
+                    opponentCar.rotation.y = opponentRotVal;
                 }
                 
                 updateCamera();
+                sendUpdates();
                 renderer.render(scene, camera);
             }
         }

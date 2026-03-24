@@ -55,11 +55,16 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Forward game updates to the other player
-    socket.on('game-update', (data) => {
-        // Send to the other player in the room
-        socket.to(data.roomCode).emit('game-update', {
-            car: data.car,
+    // Forward opponent car updates
+    socket.on('opponent-update', (data) => {
+        socket.to(data.roomCode).emit('opponent-update', {
+            car: data.car
+        });
+    });
+    
+    // Forward ball updates from host
+    socket.on('ball-update', (data) => {
+        socket.to(data.roomCode).emit('ball-update', {
             ball: data.ball,
             score: data.score
         });
@@ -70,6 +75,7 @@ io.on('connection', (socket) => {
     });
     
     socket.on('disconnect', () => {
+        console.log('❌ Player disconnected:', socket.id);
         for (const [code, room] of rooms.entries()) {
             const idx = room.players.findIndex(p => p.id === socket.id);
             if (idx !== -1) {
