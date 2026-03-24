@@ -231,7 +231,7 @@
         let isResetting = false;
         const SEND_RATE = 1000 / 30;
         
-        // Ball variables - ONLY HOST controls these!
+        // Ball variables
         let ballPos = new THREE.Vector3(0, 1.2, 0);
         let ballVel = new THREE.Vector3(0, 0, 0);
         
@@ -245,22 +245,27 @@
         const blueStartPos = new THREE.Vector3(0, 0.4, 45);
         const orangeStartPos = new THREE.Vector3(0, 0.4, -45);
         
-        // Physics constants
-        const MAX_NORMAL_SPEED = 0.1;
-        const MAX_BOOST_SPEED = 0.15;
-        const ACCEL = 0.018;
-        const BOOST_ACCEL = 0.042;
-        const TURN_SPEED = 0.028;
-        const FRICTION = 0.97;
-        const JUMP_FORCE = 0.18;
-        const GRAVITY = 0.010;
+        // ========== IMPROVED PHYSICS ==========
+        // Car physics - FASTER and EQUAL for both players
+        const MAX_NORMAL_SPEED = 0.15;      // Increased from 0.2 (faster)
+        const MAX_BOOST_SPEED = 0.2;        // Increased from 0.3 (much faster boost)
+        const ACCEL = 0.025;                // Increased from 0.018
+        const BOOST_ACCEL = 0.06;           // Increased from 0.042
+        const TURN_SPEED = 0.035;           // Slightly faster turning
+        const FRICTION = 0.98;              // Less friction (more slide)
+        const JUMP_FORCE = 0.22;            // Higher jump
+        const GRAVITY = 0.012;              // Slightly higher gravity
         
-        // Ball physics
-        const BALL_GRAVITY = 0.003;
-        const BALL_BOUNCE = 0.5;
-        const BALL_FRICTION = 0.99;
-        const BALL_HIT_POWER = 0.5;
-        const BALL_Y_BOOST = 0.08;
+        // ========== MORE BOOST ==========
+        const BOOST_DRAIN = 0.4;             // Slower drain (was 0.8)
+        const BOOST_RECHARGE = 0.5;          // Faster recharge (was 0.25)
+        
+        // ========== BALL PHYSICS - MORE ROLL ==========
+        const BALL_GRAVITY = 0.004;          // Lower gravity (was 0.003)
+        const BALL_BOUNCE = 0.7;             // More bounce (was 0.5)
+        const BALL_FRICTION = 0.995;         // Less friction (was 0.99) - rolls more!
+        const BALL_HIT_POWER = 0.7;          // Slightly stronger hits (was 0.5)
+        const BALL_Y_BOOST = 0.12;           // Higher vertical hits (was 0.08)
         
         const keys = {};
         
@@ -304,7 +309,7 @@
             initGame();
         });
         
-        // Receive opponent's car position with timestamp for smoothing
+        // Receive opponent's car position
         socket.on('opponent-update', (data) => {
             if (data.car) {
                 targetOpponentPos.x = data.car.x;
@@ -339,12 +344,10 @@
             const goalPopup = document.getElementById('goal-popup');
             goalPopup.style.display = 'block';
             setTimeout(() => goalPopup.style.display = 'none', 1500);
-            
-            // Reset cars after goal
             resetCarsAfterGoal();
         });
         
-        // Reset cars to starting positions
+        // Reset cars after goal
         function resetCarsAfterGoal() {
             isResetting = true;
             
@@ -358,7 +361,7 @@
             }
             myVel.set(0, 0, 0);
             myCar.rotation.y = myRot;
-            myBoost = 100;
+            myBoost = 100;  // Full boost after goal!
             
             // Tell opponent to reset their car
             socket.emit('reset-cars', { roomCode: currentLobby });
@@ -387,7 +390,7 @@
                 }
                 myVel.set(0, 0, 0);
                 myCar.rotation.y = myRot;
-                myBoost = 100;
+                myBoost = 100;  // Full boost after goal!
             }
         });
         
@@ -554,10 +557,11 @@
             
             const isBoosting = keys['ShiftLeft'] && myBoost > 0;
             
+            // MORE BOOST - slower drain, faster recharge
             if (isBoosting) {
-                myBoost = Math.max(myBoost - 0.8, 0);
+                myBoost = Math.max(myBoost - BOOST_DRAIN, 0);
             } else if (myBoost < 100) {
-                myBoost = Math.min(myBoost + 0.25, 100);
+                myBoost = Math.min(myBoost + BOOST_RECHARGE, 100);
             }
             
             document.getElementById('boostFill').style.width = (myBoost) + '%';
@@ -595,7 +599,7 @@
             }
             
             let turnMultiplier = 1 - (Math.abs(myVel.z) / MAX_BOOST_SPEED) * 0.4;
-            turnMultiplier = Math.max(turnMultiplier, 0.6);
+            turnMultiplier = Math.max(turnMultiplier, 0.5);
             
             if (keys['KeyA']) {
                 myRot += TURN_SPEED * turnMultiplier;
@@ -627,7 +631,7 @@
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // ONLY HOST updates ball physics
+        // BALL PHYSICS - More rolling, lower gravity
         function updateBallHost() {
             if (!isHost || isResetting) return;
             
@@ -639,12 +643,13 @@
             } else {
                 ballPos.y = 1.2;
                 ballVel.y *= -BALL_BOUNCE;
-                ballVel.x *= 0.98;
-                ballVel.z *= 0.98;
+                // Less friction on ground so ball rolls more
+                ballVel.x *= 0.99;
+                ballVel.z *= 0.99;
             }
             
             if (Math.abs(ballPos.x) > 39) {
-                ballVel.x *= -0.7;
+                ballVel.x *= -0.75;
                 ballPos.x = Math.sign(ballPos.x) * 39;
             }
             
@@ -659,10 +664,9 @@
                         document.getElementById('scoreOrange').innerText = scoreOrange;
                         socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
-                    // Don't reset ball here - let the goal event handler do it
                     return;
                 } else {
-                    ballVel.z *= -0.65;
+                    ballVel.z *= -0.7;
                     ballPos.z = Math.sign(ballPos.z) * 59;
                 }
             }
@@ -670,36 +674,34 @@
             // Car-ball collision for MY CAR
             if (myCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(myCar.position).normalize();
-                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.2;
+                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.25;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
             
-            // Car-ball collision for OPPONENT CAR (using smoothed position)
+            // Car-ball collision for OPPONENT CAR
             if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
-                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.2;
+                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.25;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
             
-            // Update ball visual
             ball.position.copy(ballPos);
         }
         
-        // Smooth opponent movement (interpolation)
+        // Smooth opponent movement
         function smoothOpponent() {
             if (!opponentCar) return;
             
-            // Smoothly interpolate position (0.3 = faster smoothing, lower = smoother but slower)
-            currentOpponentPos.lerp(targetOpponentPos, 0.3);
-            currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.3;
+            currentOpponentPos.lerp(targetOpponentPos, 0.35);
+            currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.35;
             
             opponentCar.position.copy(currentOpponentPos);
             opponentCar.rotation.y = currentOpponentRot;
             
-            // Calculate opponent velocity for ball collisions
+            // Store opponent velocity for ball collisions
             if (opponentVel) {
                 opponentVel = currentOpponentPos.clone().sub(opponentCar.position);
             }
@@ -708,18 +710,18 @@
         function updateCamera() {
             if (camMode === 'car') {
                 const speed = Math.abs(myVel.z);
-                const speedFactor = Math.min(speed / 1.2, 0.5);
-                const distance = 8 + (speedFactor * 2.5);
-                const height = 4.2 + (speedFactor * 0.8);
+                const speedFactor = Math.min(speed / MAX_BOOST_SPEED, 0.6);
+                const distance = 9 + (speedFactor * 3);
+                const height = 4.5 + (speedFactor * 1);
                 const cameraOffset = new THREE.Vector3(0, height, distance).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
-                const lookOffset = new THREE.Vector3(0, 1, -7).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
+                const lookOffset = new THREE.Vector3(0, 1.2, -8).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.lookAt(myCar.position.clone().add(lookOffset));
             } else {
                 const toBall = new THREE.Vector3().subVectors(ballPos, myCar.position).normalize();
-                const cameraDistance = 9;
+                const cameraDistance = 10;
                 const cameraOffset = toBall.clone().multiplyScalar(-cameraDistance);
-                cameraOffset.y += 3.5;
+                cameraOffset.y += 4;
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
                 camera.lookAt(ballPos);
             }
@@ -732,7 +734,6 @@
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
                 
-                // Send my car position to opponent
                 socket.emit('opponent-update', {
                     roomCode: currentLobby,
                     car: {
@@ -741,7 +742,6 @@
                     }
                 });
                 
-                // If I'm host, send ball position too
                 if (isHost) {
                     socket.emit('ball-update', {
                         roomCode: currentLobby,
@@ -771,7 +771,6 @@
                 sendUpdates();
                 renderer.render(scene, camera);
             } else if (myCar && isResetting) {
-                // Still render but don't update physics
                 renderer.render(scene, camera);
             }
         }
