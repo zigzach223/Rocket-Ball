@@ -170,7 +170,7 @@
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET LEAGUE 🚗</h1>
-            <div class="subtitle">Online Multiplayer - Slower Speed Mode</div>
+            <div class="subtitle">Online Multiplayer - Bigger Arena Mode</div>
             
             <div id="mainMenu">
                 <input type="text" id="playerName" placeholder="Enter your name">
@@ -255,24 +255,33 @@
         let ballVel = new THREE.Vector3(0, 0, 0);
         
         // Opponent position with smoothing
-        let targetOpponentPos = new THREE.Vector3(0, 0.4, -45);
+        let targetOpponentPos = new THREE.Vector3(0, 0.4, -65);
         let targetOpponentRot = Math.PI;
-        let currentOpponentPos = new THREE.Vector3(0, 0.4, -45);
+        let currentOpponentPos = new THREE.Vector3(0, 0.4, -65);
         let currentOpponentRot = Math.PI;
         
-        // Starting positions
-        const blueStartPos = new THREE.Vector3(0, 0.4, 45);
-        const orangeStartPos = new THREE.Vector3(0, 0.4, -45);
+        // ========== BIGGER ARENA ==========
+        const ARENA_WIDTH = 100;      // Was 80
+        const ARENA_LENGTH = 160;     // Was 120
+        const ARENA_HEIGHT = 20;      // For roof
+        
+        // Starting positions (further apart)
+        const blueStartPos = new THREE.Vector3(0, 0.4, 65);
+        const orangeStartPos = new THREE.Vector3(0, 0.4, -65);
+        
+        // Boundaries
+        const BOUNDARY_X = ARENA_WIDTH / 2 - 5;
+        const BOUNDARY_Z = ARENA_LENGTH / 2 - 5;
         
         // ========== SLOWER CAR PHYSICS ==========
-        const MAX_NORMAL_SPEED = 1.0;      // Slower normal speed
-        const MAX_BOOST_SPEED = 1.5;       // Slower boost speed
-        const ACCEL = 0.035;               // Acceleration rate
-        const BOOST_ACCEL = 0.07;          // Boost acceleration
-        const TURN_SPEED = 0.04;           // Turning speed
-        const FRICTION = 0.98;             // Friction
-        const JUMP_FORCE = 0.28;           // Jump force
-        const GRAVITY = 0.015;             // Gravity
+        const MAX_NORMAL_SPEED = 0.2;      // Slow normal speed
+        const MAX_BOOST_SPEED = 0.3;       // Slow boost speed
+        const ACCEL = 0.012;               // Gentle acceleration
+        const BOOST_ACCEL = 0.022;          // Gentle boost acceleration
+        const TURN_SPEED = 0.025;           // Turning speed
+        const FRICTION = 0.97;              // Friction
+        const JUMP_FORCE = 0.22;            // Jump force
+        const GRAVITY = 0.012;              // Gravity
         
         // ========== BOOST ==========
         const BOOST_DRAIN = 0.5;
@@ -286,8 +295,8 @@
         const BALL_Y_BOOST = 0.15;
         
         // ========== BIGGER GOALS ==========
-        const GOAL_WIDTH = 20;
-        const GOAL_HEIGHT = 8;
+        const GOAL_WIDTH = 22;
+        const GOAL_HEIGHT = 9;
         const GOAL_DEPTH = 1;
         
         const keys = {};
@@ -509,8 +518,8 @@
         
         function initGame() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x050505);
-            scene.fog = new THREE.FogExp2(0x050505, 0.002);
+            scene.background = new THREE.Color(0x0a0a2a); // Dark blue background
+            scene.fog = new THREE.FogExp2(0x0a0a2a, 0.0015);
             
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
@@ -519,24 +528,78 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
             
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
             const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(20, 40, 20);
+            light.position.set(30, 50, 30);
             light.castShadow = true;
             scene.add(light);
-            const fillLight = new THREE.PointLight(0x4466ff, 0.3);
-            fillLight.position.set(0, 20, 0);
-            scene.add(fillLight);
             
-            const ARENA_W = 80, ARENA_D = 120;
-            const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_W, ARENA_D), new THREE.MeshPhongMaterial({ color: 0x113311 }));
+            const backLight = new THREE.PointLight(0x4466ff, 0.5);
+            backLight.position.set(0, 20, 0);
+            scene.add(backLight);
+            
+            // ========== BIGGER ARENA FLOOR ==========
+            const floorMat = new THREE.MeshPhongMaterial({ color: 0x226622, shininess: 60 });
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_WIDTH, ARENA_LENGTH), floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.receiveShadow = true;
             scene.add(floor);
             
-            const gridHelper = new THREE.GridHelper(ARENA_D, 30, 0x44aa44, 0x226622);
-            gridHelper.position.y = 0.01;
+            // Grid helper
+            const gridHelper = new THREE.GridHelper(ARENA_LENGTH, 40, 0x66ff66, 0x33aa33);
+            gridHelper.position.y = 0.02;
             scene.add(gridHelper);
+            
+            // ========== VISIBLE BLUE ROOF (Sky/Ceiling) ==========
+            // Semi-transparent blue ceiling
+            const roofMat = new THREE.MeshPhongMaterial({ 
+                color: 0x2288ff, 
+                emissive: 0x004466,
+                transparent: true, 
+                opacity: 0.4,
+                side: THREE.DoubleSide
+            });
+            const roof = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_WIDTH + 10, ARENA_LENGTH + 10), roofMat);
+            roof.rotation.x = Math.PI / 2;
+            roof.position.y = ARENA_HEIGHT;
+            roof.receiveShadow = false;
+            scene.add(roof);
+            
+            // Add a second layer for glow effect
+            const glowMat = new THREE.MeshPhongMaterial({ 
+                color: 0x44aaff, 
+                transparent: true, 
+                opacity: 0.2,
+                side: THREE.DoubleSide
+            });
+            const glowRoof = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_WIDTH + 15, ARENA_LENGTH + 15), glowMat);
+            glowRoof.rotation.x = Math.PI / 2;
+            glowRoof.position.y = ARENA_HEIGHT - 0.5;
+            scene.add(glowRoof);
+            
+            // Arena walls (semi-transparent for visibility)
+            const wallMat = new THREE.MeshPhongMaterial({ color: 0x44aa44, transparent: true, opacity: 0.3 });
+            
+            // Left wall
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(1, ARENA_HEIGHT, ARENA_LENGTH), wallMat);
+            leftWall.position.set(-ARENA_WIDTH/2, ARENA_HEIGHT/2, 0);
+            scene.add(leftWall);
+            
+            // Right wall
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(1, ARENA_HEIGHT, ARENA_LENGTH), wallMat);
+            rightWall.position.set(ARENA_WIDTH/2, ARENA_HEIGHT/2, 0);
+            scene.add(rightWall);
+            
+            // Back wall (behind blue goal)
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(ARENA_WIDTH, ARENA_HEIGHT, 1), wallMat);
+            backWall.position.set(0, ARENA_HEIGHT/2, ARENA_LENGTH/2);
+            scene.add(backWall);
+            
+            // Front wall (behind orange goal)
+            const frontWall = new THREE.Mesh(new THREE.BoxGeometry(ARENA_WIDTH, ARENA_HEIGHT, 1), wallMat);
+            frontWall.position.set(0, ARENA_HEIGHT/2, -ARENA_LENGTH/2);
+            scene.add(frontWall);
             
             function createCar(color, position, rotation) {
                 const group = new THREE.Group();
@@ -600,42 +663,44 @@
             // BIGGER GOALS with glow effect
             const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.8 });
             const goalBlueObj = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, GOAL_HEIGHT, GOAL_DEPTH), goalBlueMat);
-            goalBlueObj.position.set(0, GOAL_HEIGHT/2, 60);
+            goalBlueObj.position.set(0, GOAL_HEIGHT/2, ARENA_LENGTH/2 - 1);
             scene.add(goalBlueObj);
             
             const goalOrangeMat = new THREE.MeshPhongMaterial({ color: 0xff8844, emissive: 0x442200, transparent: true, opacity: 0.8 });
             const goalOrangeObj = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, GOAL_HEIGHT, GOAL_DEPTH), goalOrangeMat);
-            goalOrangeObj.position.set(0, GOAL_HEIGHT/2, -60);
+            goalOrangeObj.position.set(0, GOAL_HEIGHT/2, -ARENA_LENGTH/2 + 1);
             scene.add(goalOrangeObj);
             
             // Goal posts
             const postMat = new THREE.MeshPhongMaterial({ color: 0xccaa88 });
             const postHeight = GOAL_HEIGHT;
+            const goalZ = ARENA_LENGTH/2 - 1;
+            const goalZNeg = -ARENA_LENGTH/2 + 1;
             
             // Blue goal posts
             const leftPostBlue = new THREE.Mesh(new THREE.BoxGeometry(0.5, postHeight, 0.5), postMat);
-            leftPostBlue.position.set(-GOAL_WIDTH/2, postHeight/2, 60);
+            leftPostBlue.position.set(-GOAL_WIDTH/2, postHeight/2, goalZ);
             scene.add(leftPostBlue);
             
             const rightPostBlue = new THREE.Mesh(new THREE.BoxGeometry(0.5, postHeight, 0.5), postMat);
-            rightPostBlue.position.set(GOAL_WIDTH/2, postHeight/2, 60);
+            rightPostBlue.position.set(GOAL_WIDTH/2, postHeight/2, goalZ);
             scene.add(rightPostBlue);
             
             const topBarBlue = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, 0.5, 0.5), postMat);
-            topBarBlue.position.set(0, postHeight, 60);
+            topBarBlue.position.set(0, postHeight, goalZ);
             scene.add(topBarBlue);
             
             // Orange goal posts
             const leftPostOrange = new THREE.Mesh(new THREE.BoxGeometry(0.5, postHeight, 0.5), postMat);
-            leftPostOrange.position.set(-GOAL_WIDTH/2, postHeight/2, -60);
+            leftPostOrange.position.set(-GOAL_WIDTH/2, postHeight/2, goalZNeg);
             scene.add(leftPostOrange);
             
             const rightPostOrange = new THREE.Mesh(new THREE.BoxGeometry(0.5, postHeight, 0.5), postMat);
-            rightPostOrange.position.set(GOAL_WIDTH/2, postHeight/2, -60);
+            rightPostOrange.position.set(GOAL_WIDTH/2, postHeight/2, goalZNeg);
             scene.add(rightPostOrange);
             
             const topBarOrange = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, 0.5, 0.5), postMat);
-            topBarOrange.position.set(0, postHeight, -60);
+            topBarOrange.position.set(0, postHeight, goalZNeg);
             scene.add(topBarOrange);
             
             myVel = new THREE.Vector3();
@@ -724,14 +789,15 @@
                 myVel.y = 0;
             }
             
-            myCar.position.x = THREE.MathUtils.clamp(myCar.position.x, -38, 38);
-            myCar.position.z = THREE.MathUtils.clamp(myCar.position.z, -58, 58);
+            // Bigger arena boundaries
+            myCar.position.x = THREE.MathUtils.clamp(myCar.position.x, -BOUNDARY_X, BOUNDARY_X);
+            myCar.position.z = THREE.MathUtils.clamp(myCar.position.z, -BOUNDARY_Z, BOUNDARY_Z);
             
-            const speedKmh = Math.abs(myVel.z * 60).toFixed(0);
+            const speedKmh = Math.abs(myVel.z * 80).toFixed(0);
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // BALL PHYSICS
+        // BALL PHYSICS with bigger arena boundaries
         function updateBallHost() {
             if (!isHost || isResetting) return;
             
@@ -747,39 +813,49 @@
                 ballVel.z *= 0.99;
             }
             
-            if (Math.abs(ballPos.x) > 39) {
+            // Bigger arena boundaries
+            if (Math.abs(ballPos.x) > BOUNDARY_X) {
                 ballVel.x *= -0.75;
-                ballPos.x = Math.sign(ballPos.x) * 39;
+                ballPos.x = Math.sign(ballPos.x) * BOUNDARY_X;
             }
             
-            // GOAL DETECTION
+            if (Math.abs(ballPos.z) > BOUNDARY_Z + 2) {
+                ballVel.z *= -0.75;
+                ballPos.z = Math.sign(ballPos.z) * BOUNDARY_Z;
+            }
+            
+            // GOAL DETECTION (goals are at the ends)
             const goalZoneWidth = GOAL_WIDTH / 2;
             const goalZoneHeight = GOAL_HEIGHT;
+            const goalZPos = BOUNDARY_Z + 3;
+            const goalZNeg = -BOUNDARY_Z - 3;
             
-            if (Math.abs(ballPos.z) > 58) {
+            if (ballPos.z > BOUNDARY_Z + 2) {
                 if (Math.abs(ballPos.x) < goalZoneWidth && ballPos.y < goalZoneHeight) {
                     if (!goalCooldown && !isResetting) {
-                        if (ballPos.z < 0) {
-                            scoreBlue++;
-                            document.getElementById('scoreBlue').innerText = scoreBlue;
-                            socket.emit('goal', { roomCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
-                        } else {
-                            scoreOrange++;
-                            document.getElementById('scoreOrange').innerText = scoreOrange;
-                            socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
-                        }
+                        scoreBlue++;
+                        document.getElementById('scoreBlue').innerText = scoreBlue;
+                        socket.emit('goal', { roomCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
                     return;
-                } else {
-                    ballVel.z *= -0.7;
-                    ballPos.z = Math.sign(ballPos.z) * 58;
+                }
+            }
+            
+            if (ballPos.z < -BOUNDARY_Z - 2) {
+                if (Math.abs(ballPos.x) < goalZoneWidth && ballPos.y < goalZoneHeight) {
+                    if (!goalCooldown && !isResetting) {
+                        scoreOrange++;
+                        document.getElementById('scoreOrange').innerText = scoreOrange;
+                        socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
+                    }
+                    return;
                 }
             }
             
             // Car-ball collision for MY CAR
             if (myCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(myCar.position).normalize();
-                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.3;
+                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.25;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
@@ -788,7 +864,7 @@
             if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
-                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.3;
+                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.25;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
@@ -817,7 +893,7 @@
                 const speed = Math.abs(myVel.z);
                 const speedFactor = Math.min(speed / MAX_BOOST_SPEED, 0.6);
                 const distance = 10 + (speedFactor * 3);
-                const height = 5 + (speedFactor * 1);
+                const height = 5.5 + (speedFactor * 1);
                 const cameraOffset = new THREE.Vector3(0, height, distance).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
                 const lookOffset = new THREE.Vector3(0, 1.5, -9).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
