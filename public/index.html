@@ -7,14 +7,31 @@
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: white; pointer-events: none; z-index: 10; text-align: center; width: 100%; }
-        .score-board { font-size: 32px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 15px; display: inline-block; }
+        .score-board { font-size: 48px; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 30px; border-radius: 15px; display: inline-block; backdrop-filter: blur(5px); }
         .blue { color: #0088ff; }
         .orange { color: #ff8800; }
-        .controls-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
-        #goal-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 80px; font-weight: bold; text-shadow: 0 0 20px #fff; display: none; z-index: 100; animation: pulse 0.5s; }
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+        .controls-hint { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
+        #goal-popup { 
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            color: white; 
+            font-size: 100px; 
+            font-weight: bold; 
+            text-shadow: 0 0 30px gold, 0 0 20px orange;
+            background: rgba(0,0,0,0.7);
+            padding: 20px 50px;
+            border-radius: 20px;
+            border: 3px solid gold;
+            display: none; 
+            z-index: 100; 
+            animation: goalPulse 0.8s ease-out;
+            white-space: nowrap;
+        }
+        @keyframes goalPulse {
+            0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
             100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
         .connection-status {
@@ -100,7 +117,8 @@
             text-align: center;
             border: 2px solid #ffaa44;
         }
-        h1 { color: #ffaa44; margin-bottom: 20px; }
+        h1 { color: #ffaa44; margin-bottom: 20px; font-size: 32px; }
+        .subtitle { color: #88aaff; margin-bottom: 20px; }
         input {
             width: 100%;
             padding: 12px;
@@ -152,7 +170,7 @@
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET LEAGUE 🚗</h1>
-            <div class="subtitle">Online Multiplayer - Smooth Gameplay</div>
+            <div class="subtitle">Online Multiplayer - Slower Speed Mode</div>
             
             <div id="mainMenu">
                 <input type="text" id="playerName" placeholder="Enter your name">
@@ -189,7 +207,7 @@
         <div id="ui">
             <div class="score-board">
                 <span class="blue">🔵 BLUE: <span id="scoreBlue">0</span></span>
-                <span style="margin: 0 20px;">|</span>
+                <span style="margin: 0 30px;">|</span>
                 <span class="orange">🟠 ORANGE: <span id="scoreOrange">0</span></span>
             </div>
         </div>
@@ -236,7 +254,7 @@
         let ballPos = new THREE.Vector3(0, 1.2, 0);
         let ballVel = new THREE.Vector3(0, 0, 0);
         
-        // Opponent position with better smoothing
+        // Opponent position with smoothing
         let targetOpponentPos = new THREE.Vector3(0, 0.4, -45);
         let targetOpponentRot = Math.PI;
         let currentOpponentPos = new THREE.Vector3(0, 0.4, -45);
@@ -246,33 +264,95 @@
         const blueStartPos = new THREE.Vector3(0, 0.4, 45);
         const orangeStartPos = new THREE.Vector3(0, 0.4, -45);
         
-        // ========== CAR PHYSICS ==========
-        const MAX_NORMAL_SPEED = 0.45;
-        const MAX_BOOST_SPEED = 0.8;
-        const ACCEL = 0.025;
-        const BOOST_ACCEL = 0.06;
-        const TURN_SPEED = 0.035;
-        const FRICTION = 0.98;
-        const JUMP_FORCE = 0.22;
-        const GRAVITY = 0.012;
+        // ========== SLOWER CAR PHYSICS ==========
+        const MAX_NORMAL_SPEED = 1.0;      // Slower normal speed
+        const MAX_BOOST_SPEED = 1.5;       // Slower boost speed
+        const ACCEL = 0.035;               // Acceleration rate
+        const BOOST_ACCEL = 0.07;          // Boost acceleration
+        const TURN_SPEED = 0.04;           // Turning speed
+        const FRICTION = 0.98;             // Friction
+        const JUMP_FORCE = 0.28;           // Jump force
+        const GRAVITY = 0.015;             // Gravity
         
         // ========== BOOST ==========
-        const BOOST_DRAIN = 0.4;
-        const BOOST_RECHARGE = 0.5;
+        const BOOST_DRAIN = 0.5;
+        const BOOST_RECHARGE = 0.4;
         
         // ========== BALL PHYSICS ==========
-        const BALL_GRAVITY = 0.004;
+        const BALL_GRAVITY = 0.005;
         const BALL_BOUNCE = 0.7;
         const BALL_FRICTION = 0.995;
-        const BALL_HIT_POWER = 0.7;
-        const BALL_Y_BOOST = 0.12;
+        const BALL_HIT_POWER = 0.8;
+        const BALL_Y_BOOST = 0.15;
         
         // ========== BIGGER GOALS ==========
-        const GOAL_WIDTH = 20;      // Was 14
-        const GOAL_HEIGHT = 8;      // Was 6
+        const GOAL_WIDTH = 20;
+        const GOAL_HEIGHT = 8;
         const GOAL_DEPTH = 1;
         
         const keys = {};
+        
+        // Show goal popup with animation
+        function showGoalPopup(team) {
+            const popup = document.getElementById('goal-popup');
+            if (team === 'blue') {
+                popup.innerHTML = '🔵 BLUE SCORES! 🔵';
+                popup.style.borderColor = '#0088ff';
+                popup.style.textShadow = '0 0 30px #0088ff';
+            } else {
+                popup.innerHTML = '🟠 ORANGE SCORES! 🟠';
+                popup.style.borderColor = '#ff8800';
+                popup.style.textShadow = '0 0 30px #ff8800';
+            }
+            popup.style.display = 'block';
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 2000);
+        }
+        
+        // Reset cars and ball after goal
+        function resetAfterGoal() {
+            isResetting = true;
+            
+            // Reset my car
+            if (amIBlue) {
+                myCar.position.copy(blueStartPos);
+                myRot = 0;
+            } else {
+                myCar.position.copy(orangeStartPos);
+                myRot = Math.PI;
+            }
+            myVel.set(0, 0, 0);
+            myCar.rotation.y = myRot;
+            myBoost = 100;
+            
+            // Reset opponent's target position
+            if (amIBlue) {
+                targetOpponentPos.copy(orangeStartPos);
+                targetOpponentRot = Math.PI;
+                currentOpponentPos.copy(orangeStartPos);
+                currentOpponentRot = Math.PI;
+            } else {
+                targetOpponentPos.copy(blueStartPos);
+                targetOpponentRot = 0;
+                currentOpponentPos.copy(blueStartPos);
+                currentOpponentRot = 0;
+            }
+            
+            // Tell opponent to reset
+            socket.emit('reset-cars', { roomCode: currentLobby });
+            
+            // Reset ball (host only)
+            if (isHost) {
+                ballPos.set(0, 5, 0);
+                ballVel.set(0, 0, 0);
+                ball.position.copy(ballPos);
+            }
+            
+            setTimeout(() => {
+                isResetting = false;
+            }, 800);
+        }
         
         // Socket events
         socket.on('connect', () => {
@@ -316,7 +396,7 @@
         
         // Receive opponent's car position
         socket.on('opponent-update', (data) => {
-            if (data.car) {
+            if (data.car && !isResetting) {
                 targetOpponentPos.x = data.car.x;
                 targetOpponentPos.z = data.car.z;
                 targetOpponentPos.y = data.car.y;
@@ -326,7 +406,7 @@
         
         // Receive ball update from host
         socket.on('ball-update', (data) => {
-            if (!isHost && data.ball) {
+            if (!isHost && data.ball && !isResetting) {
                 ballPos.x = data.ball.x;
                 ballPos.z = data.ball.z;
                 ballPos.y = data.ball.y;
@@ -342,64 +422,26 @@
         });
         
         socket.on('goal', (data) => {
-            // Only add 1 point, not multiple
-            if (!goalCooldown) {
+            if (!goalCooldown && !isResetting) {
                 goalCooldown = true;
                 scoreBlue = data.score.blue;
                 scoreOrange = data.score.orange;
                 document.getElementById('scoreBlue').innerText = scoreBlue;
                 document.getElementById('scoreOrange').innerText = scoreOrange;
-                const goalPopup = document.getElementById('goal-popup');
-                goalPopup.style.display = 'block';
-                setTimeout(() => goalPopup.style.display = 'none', 1500);
-                resetCarsAfterGoal();
-                setTimeout(() => { goalCooldown = false; }, 1000);
+                
+                // Show goal popup
+                showGoalPopup(data.team);
+                
+                // Reset everything
+                resetAfterGoal();
+                
+                setTimeout(() => { goalCooldown = false; }, 1500);
             }
         });
         
-        // Reset cars after goal
-        function resetCarsAfterGoal() {
-            isResetting = true;
-            
-            // Reset my car
-            if (amIBlue) {
-                myCar.position.copy(blueStartPos);
-                myRot = 0;
-            } else {
-                myCar.position.copy(orangeStartPos);
-                myRot = Math.PI;
-            }
-            myVel.set(0, 0, 0);
-            myCar.rotation.y = myRot;
-            myBoost = 100;
-            
-            // Tell opponent to reset
-            socket.emit('reset-cars', { roomCode: currentLobby });
-            
-            // Reset ball (host only)
-            if (isHost) {
-                ballPos.set(0, 5, 0);
-                ballVel.set(0, 0, 0);
-                ball.position.copy(ballPos);
-            }
-            
-            // Reset opponent target position
-            if (amIBlue) {
-                targetOpponentPos.copy(orangeStartPos);
-                targetOpponentRot = Math.PI;
-            } else {
-                targetOpponentPos.copy(blueStartPos);
-                targetOpponentRot = 0;
-            }
-            
-            setTimeout(() => {
-                isResetting = false;
-            }, 500);
-        }
-        
-        // Receive reset command
+        // Receive reset command from host
         socket.on('reset-cars', (data) => {
-            if (!isHost) {
+            if (!isHost && !isResetting) {
                 if (amIBlue) {
                     myCar.position.copy(blueStartPos);
                     myRot = 0;
@@ -410,6 +452,15 @@
                 myVel.set(0, 0, 0);
                 myCar.rotation.y = myRot;
                 myBoost = 100;
+                
+                // Reset opponent target for non-host
+                if (amIBlue) {
+                    targetOpponentPos.copy(orangeStartPos);
+                    targetOpponentRot = Math.PI;
+                } else {
+                    targetOpponentPos.copy(blueStartPos);
+                    targetOpponentRot = 0;
+                }
             }
         });
         
@@ -546,21 +597,20 @@
             ball.castShadow = true;
             scene.add(ball);
             
-            // BIGGER GOALS
-            const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.7 });
+            // BIGGER GOALS with glow effect
+            const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.8 });
             const goalBlueObj = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, GOAL_HEIGHT, GOAL_DEPTH), goalBlueMat);
             goalBlueObj.position.set(0, GOAL_HEIGHT/2, 60);
             scene.add(goalBlueObj);
             
-            const goalOrangeMat = new THREE.MeshPhongMaterial({ color: 0xff8844, emissive: 0x442200, transparent: true, opacity: 0.7 });
+            const goalOrangeMat = new THREE.MeshPhongMaterial({ color: 0xff8844, emissive: 0x442200, transparent: true, opacity: 0.8 });
             const goalOrangeObj = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, GOAL_HEIGHT, GOAL_DEPTH), goalOrangeMat);
             goalOrangeObj.position.set(0, GOAL_HEIGHT/2, -60);
             scene.add(goalOrangeObj);
             
-            // Add goal posts (visual)
+            // Goal posts
             const postMat = new THREE.MeshPhongMaterial({ color: 0xccaa88 });
             const postHeight = GOAL_HEIGHT;
-            const postWidth = GOAL_WIDTH / 2;
             
             // Blue goal posts
             const leftPostBlue = new THREE.Mesh(new THREE.BoxGeometry(0.5, postHeight, 0.5), postMat);
@@ -677,11 +727,11 @@
             myCar.position.x = THREE.MathUtils.clamp(myCar.position.x, -38, 38);
             myCar.position.z = THREE.MathUtils.clamp(myCar.position.z, -58, 58);
             
-            const speedKmh = Math.abs(myVel.z * 70).toFixed(0);
+            const speedKmh = Math.abs(myVel.z * 60).toFixed(0);
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // BALL PHYSICS with bigger goal detection
+        // BALL PHYSICS
         function updateBallHost() {
             if (!isHost || isResetting) return;
             
@@ -702,13 +752,13 @@
                 ballPos.x = Math.sign(ballPos.x) * 39;
             }
             
-            // BIGGER GOAL DETECTION
+            // GOAL DETECTION
             const goalZoneWidth = GOAL_WIDTH / 2;
             const goalZoneHeight = GOAL_HEIGHT;
             
             if (Math.abs(ballPos.z) > 58) {
                 if (Math.abs(ballPos.x) < goalZoneWidth && ballPos.y < goalZoneHeight) {
-                    if (!goalCooldown) {
+                    if (!goalCooldown && !isResetting) {
                         if (ballPos.z < 0) {
                             scoreBlue++;
                             document.getElementById('scoreBlue').innerText = scoreBlue;
@@ -718,8 +768,6 @@
                             document.getElementById('scoreOrange').innerText = scoreOrange;
                             socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                         }
-                        goalCooldown = true;
-                        setTimeout(() => { goalCooldown = false; }, 1000);
                     }
                     return;
                 } else {
@@ -731,7 +779,7 @@
             // Car-ball collision for MY CAR
             if (myCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(myCar.position).normalize();
-                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.25;
+                const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.3;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
@@ -740,7 +788,7 @@
             if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
-                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.25;
+                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.3;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
@@ -750,31 +798,35 @@
         
         // Smooth opponent movement
         function smoothOpponent() {
-            if (!opponentCar) return;
+            if (!opponentCar || isResetting) return;
             
-            // Use lower smoothing for smoother movement (0.25 instead of 0.35)
-            currentOpponentPos.lerp(targetOpponentPos, 0.25);
-            currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.25;
+            currentOpponentPos.lerp(targetOpponentPos, 0.3);
+            currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.3;
             
             opponentCar.position.copy(currentOpponentPos);
             opponentCar.rotation.y = currentOpponentRot;
+            
+            // Calculate opponent velocity
+            if (opponentVel) {
+                opponentVel = currentOpponentPos.clone().sub(opponentCar.position);
+            }
         }
         
         function updateCamera() {
             if (camMode === 'car') {
                 const speed = Math.abs(myVel.z);
                 const speedFactor = Math.min(speed / MAX_BOOST_SPEED, 0.6);
-                const distance = 9 + (speedFactor * 3);
-                const height = 4.5 + (speedFactor * 1);
+                const distance = 10 + (speedFactor * 3);
+                const height = 5 + (speedFactor * 1);
                 const cameraOffset = new THREE.Vector3(0, height, distance).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
-                const lookOffset = new THREE.Vector3(0, 1.2, -8).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
+                const lookOffset = new THREE.Vector3(0, 1.5, -9).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.lookAt(myCar.position.clone().add(lookOffset));
             } else {
                 const toBall = new THREE.Vector3().subVectors(ballPos, myCar.position).normalize();
-                const cameraDistance = 10;
+                const cameraDistance = 11;
                 const cameraOffset = toBall.clone().multiplyScalar(-cameraDistance);
-                cameraOffset.y += 4;
+                cameraOffset.y += 4.5;
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
                 camera.lookAt(ballPos);
             }
