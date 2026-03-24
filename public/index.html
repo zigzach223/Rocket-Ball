@@ -152,7 +152,7 @@
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET LEAGUE 🚗</h1>
-            <div class="subtitle">Online Multiplayer</div>
+            <div class="subtitle">Online Multiplayer - Smooth Gameplay</div>
             
             <div id="mainMenu">
                 <input type="text" id="playerName" placeholder="Enter your name">
@@ -223,20 +223,27 @@
         let scene, camera, renderer;
         let myCar, opponentCar, ball;
         let myVel, opponentVel;
-        let myRot = 0, opponentRot = 0;
+        let myRot = 0;
         let myBoost = 100;
         let scoreBlue = 0, scoreOrange = 0;
         let camMode = 'car';
         let lastSendTime = 0;
+        let isResetting = false;
         const SEND_RATE = 1000 / 30;
         
         // Ball variables - ONLY HOST controls these!
         let ballPos = new THREE.Vector3(0, 1.2, 0);
         let ballVel = new THREE.Vector3(0, 0, 0);
         
-        // Opponent position received from network
-        let opponentPos = new THREE.Vector3(0, 0.4, -45);
-        let opponentRotVal = Math.PI;
+        // Opponent position with smoothing
+        let targetOpponentPos = new THREE.Vector3(0, 0.4, -45);
+        let targetOpponentRot = Math.PI;
+        let currentOpponentPos = new THREE.Vector3(0, 0.4, -45);
+        let currentOpponentRot = Math.PI;
+        
+        // Starting positions
+        const blueStartPos = new THREE.Vector3(0, 0.4, 45);
+        const orangeStartPos = new THREE.Vector3(0, 0.4, -45);
         
         // Physics constants
         const MAX_NORMAL_SPEED = 0.1;
@@ -297,17 +304,13 @@
             initGame();
         });
         
-        // Receive opponent's car position
+        // Receive opponent's car position with timestamp for smoothing
         socket.on('opponent-update', (data) => {
             if (data.car) {
-                opponentPos.x = data.car.x;
-                opponentPos.z = data.car.z;
-                opponentPos.y = data.car.y;
-                opponentRotVal = data.car.rot;
-                if (opponentCar) {
-                    opponentCar.position.copy(opponentPos);
-                    opponentCar.rotation.y = opponentRotVal;
-                }
+                targetOpponentPos.x = data.car.x;
+                targetOpponentPos.z = data.car.z;
+                targetOpponentPos.y = data.car.y;
+                targetOpponentRot = data.car.rot;
             }
         });
         
@@ -336,6 +339,56 @@
             const goalPopup = document.getElementById('goal-popup');
             goalPopup.style.display = 'block';
             setTimeout(() => goalPopup.style.display = 'none', 1500);
+            
+            // Reset cars after goal
+            resetCarsAfterGoal();
+        });
+        
+        // Reset cars to starting positions
+        function resetCarsAfterGoal() {
+            isResetting = true;
+            
+            // Reset my car
+            if (amIBlue) {
+                myCar.position.copy(blueStartPos);
+                myRot = 0;
+            } else {
+                myCar.position.copy(orangeStartPos);
+                myRot = Math.PI;
+            }
+            myVel.set(0, 0, 0);
+            myCar.rotation.y = myRot;
+            myBoost = 100;
+            
+            // Tell opponent to reset their car
+            socket.emit('reset-cars', { roomCode: currentLobby });
+            
+            // Reset ball (only host does this)
+            if (isHost) {
+                ballPos.set(0, 5, 0);
+                ballVel.set(0, 0, 0);
+                ball.position.copy(ballPos);
+            }
+            
+            setTimeout(() => {
+                isResetting = false;
+            }, 500);
+        }
+        
+        // Receive reset command from host
+        socket.on('reset-cars', (data) => {
+            if (!isHost) {
+                if (amIBlue) {
+                    myCar.position.copy(blueStartPos);
+                    myRot = 0;
+                } else {
+                    myCar.position.copy(orangeStartPos);
+                    myRot = Math.PI;
+                }
+                myVel.set(0, 0, 0);
+                myCar.rotation.y = myRot;
+                myBoost = 100;
+            }
         });
         
         socket.on('error', (data) => {
@@ -446,13 +499,21 @@
             }
             
             if (amIBlue) {
-                myCar = createCar(0x88aaff, new THREE.Vector3(0, 0.4, 45), 0);
-                opponentCar = createCar(0xffaa66, opponentPos, opponentRotVal);
+                myCar = createCar(0x88aaff, blueStartPos, 0);
+                opponentCar = createCar(0xffaa66, orangeStartPos, Math.PI);
                 myRot = 0;
+                currentOpponentPos.copy(orangeStartPos);
+                targetOpponentPos.copy(orangeStartPos);
+                currentOpponentRot = Math.PI;
+                targetOpponentRot = Math.PI;
             } else {
-                myCar = createCar(0xffaa66, new THREE.Vector3(0, 0.4, -45), Math.PI);
-                opponentCar = createCar(0x88aaff, opponentPos, opponentRotVal);
+                myCar = createCar(0xffaa66, orangeStartPos, Math.PI);
+                opponentCar = createCar(0x88aaff, blueStartPos, 0);
                 myRot = Math.PI;
+                currentOpponentPos.copy(blueStartPos);
+                targetOpponentPos.copy(blueStartPos);
+                currentOpponentRot = 0;
+                targetOpponentRot = 0;
             }
             
             scene.add(myCar);
@@ -489,6 +550,8 @@
         }
         
         function updateMyCar() {
+            if (isResetting) return;
+            
             const isBoosting = keys['ShiftLeft'] && myBoost > 0;
             
             if (isBoosting) {
@@ -564,9 +627,9 @@
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // ONLY HOST updates ball physics and handles collisions with BOTH cars
+        // ONLY HOST updates ball physics
         function updateBallHost() {
-            if (!isHost) return;
+            if (!isHost || isResetting) return;
             
             ballPos.add(ballVel);
             ballVel.multiplyScalar(BALL_FRICTION);
@@ -596,11 +659,8 @@
                         document.getElementById('scoreOrange').innerText = scoreOrange;
                         socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
-                    ballPos.set(0, 5, 0);
-                    ballVel.set(0, 0, 0);
-                    const goalPopup = document.getElementById('goal-popup');
-                    goalPopup.style.display = 'block';
-                    setTimeout(() => goalPopup.style.display = 'none', 1500);
+                    // Don't reset ball here - let the goal event handler do it
+                    return;
                 } else {
                     ballVel.z *= -0.65;
                     ballPos.z = Math.sign(ballPos.z) * 59;
@@ -615,10 +675,9 @@
                 ballVel.y += BALL_Y_BOOST;
             }
             
-            // Car-ball collision for OPPONENT CAR (using opponent position from network)
+            // Car-ball collision for OPPONENT CAR (using smoothed position)
             if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
-                // Estimate opponent speed from position changes (simplified)
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
                 const hitPower = opponentSpeed * BALL_HIT_POWER + 0.2;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
@@ -627,6 +686,23 @@
             
             // Update ball visual
             ball.position.copy(ballPos);
+        }
+        
+        // Smooth opponent movement (interpolation)
+        function smoothOpponent() {
+            if (!opponentCar) return;
+            
+            // Smoothly interpolate position (0.3 = faster smoothing, lower = smoother but slower)
+            currentOpponentPos.lerp(targetOpponentPos, 0.3);
+            currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.3;
+            
+            opponentCar.position.copy(currentOpponentPos);
+            opponentCar.rotation.y = currentOpponentRot;
+            
+            // Calculate opponent velocity for ball collisions
+            if (opponentVel) {
+                opponentVel = currentOpponentPos.clone().sub(opponentCar.position);
+            }
         }
         
         function updateCamera() {
@@ -650,6 +726,8 @@
         }
         
         function sendUpdates() {
+            if (isResetting) return;
+            
             const now = Date.now();
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
@@ -681,21 +759,19 @@
             if (!scene) return;
             requestAnimationFrame(animate);
             
-            if (myCar) {
+            if (myCar && !isResetting) {
                 updateMyCar();
                 
                 if (isHost) {
                     updateBallHost();
                 }
                 
-                // Update opponent car visual from received position
-                if (opponentCar) {
-                    opponentCar.position.lerp(opponentPos, 0.3);
-                    opponentCar.rotation.y = opponentRotVal;
-                }
-                
+                smoothOpponent();
                 updateCamera();
                 sendUpdates();
+                renderer.render(scene, camera);
+            } else if (myCar && isResetting) {
+                // Still render but don't update physics
                 renderer.render(scene, camera);
             }
         }

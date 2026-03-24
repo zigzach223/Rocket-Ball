@@ -70,6 +70,11 @@ io.on('connection', (socket) => {
         });
     });
     
+    // Forward car reset command
+    socket.on('reset-cars', (data) => {
+        socket.to(data.roomCode).emit('reset-cars', {});
+    });
+    
     socket.on('goal', (data) => {
         io.to(data.roomCode).emit('goal', { team: data.team, score: data.score });
     });
