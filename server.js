@@ -57,7 +57,9 @@ io.on('connection', (socket) => {
     
     socket.on('game-update', (data) => {
         socket.to(data.roomCode).emit('game-update', {
-            car: data.car, ball: data.ball, score: data.score
+            car: data.car,
+            ball: data.ball,
+            score: data.score
         });
     });
     

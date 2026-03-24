@@ -149,7 +149,6 @@
     </style>
 </head>
 <body>
-    <!-- LOBBY SCREEN -->
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET LEAGUE 🚗</h1>
@@ -186,7 +185,6 @@
         </div>
     </div>
     
-    <!-- GAME CONTAINER -->
     <div id="gameContainer" style="display: none;">
         <div id="ui">
             <div class="score-board">
@@ -216,24 +214,26 @@
     <script type="module">
         import * as THREE from 'three';
         
-        // Socket.IO
         const socket = io();
         let currentLobby = null;
         let isHost = false;
         let playerName = '';
         let amIBlue = true;
         
-        // Game variables
         let scene, camera, renderer;
         let myCar, opponentCar, ball;
-        let myVel, opponentVel, ballVel;
+        let myVel, opponentVel;
         let myRot = 0, opponentRot = 0;
         let myBoost = 100;
         let scoreBlue = 0, scoreOrange = 0;
-        let isResetting = false;
         let camMode = 'car';
         let lastSendTime = 0;
+        let lastBallUpdateTime = 0;
         const SEND_RATE = 1000 / 30;
+        
+        // Ball variables - ONLY HOST controls these!
+        let ballPos = new THREE.Vector3(0, 1.2, 0);
+        let ballVel = new THREE.Vector3(0, 0, 0);
         
         // Physics constants
         const MAX_NORMAL_SPEED = 0.2;
@@ -245,12 +245,12 @@
         const JUMP_FORCE = 0.18;
         const GRAVITY = 0.010;
         
-        // SLOWER BALL PHYSICS
-        const BALL_GRAVITY = 0.003;      // Much lower gravity (was 0.006)
-        const BALL_BOUNCE = 0.5;          // Less bounce (was 0.65)
-        const BALL_FRICTION = 0.99;       // More friction (was 0.995)
-        const BALL_HIT_POWER = 0.5;       // Reduced hit power (was 0.8)
-        const BALL_Y_BOOST = 0.08;        // Lower vertical hit (was 0.12)
+        // Ball physics
+        const BALL_GRAVITY = 0.003;
+        const BALL_BOUNCE = 0.5;
+        const BALL_FRICTION = 0.99;
+        const BALL_HIT_POWER = 0.5;
+        const BALL_Y_BOOST = 0.08;
         
         const keys = {};
         
@@ -294,6 +294,7 @@
             initGame();
         });
         
+        // Receive game updates from host
         socket.on('game-update', (data) => {
             if (opponentCar && data.car) {
                 opponentCar.position.x = data.car.x;
@@ -301,12 +302,16 @@
                 opponentCar.position.y = data.car.y;
                 opponentCar.rotation.y = data.car.rot;
             }
+            
+            // ALWAYS use ball position from host (only host updates ball)
             if (data.ball && ball) {
-                ball.position.x = data.ball.x;
-                ball.position.z = data.ball.z;
-                ball.position.y = data.ball.y;
+                ballPos.x = data.ball.x;
+                ballPos.z = data.ball.z;
+                ballPos.y = data.ball.y;
+                ball.position.copy(ballPos);
                 ballVel = new THREE.Vector3(data.ball.vx || 0, data.ball.vy || 0, data.ball.vz || 0);
             }
+            
             if (data.score) {
                 scoreBlue = data.score.blue;
                 scoreOrange = data.score.orange;
@@ -399,8 +404,6 @@
             gridHelper.position.y = 0.01;
             scene.add(gridHelper);
             
-            // CENTER CIRCLE REMOVED - No more half circle in the middle!
-            
             function createCar(color, position, rotation) {
                 const group = new THREE.Group();
                 const bodyMat = new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
@@ -450,7 +453,7 @@
             scene.add(opponentCar);
             
             ball = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshPhongMaterial({ color: 0xffaa66, emissive: 0x442200 }));
-            ball.position.set(0, 1.2, 0);
+            ball.position.copy(ballPos);
             ball.castShadow = true;
             scene.add(ball);
             
@@ -466,7 +469,6 @@
             
             myVel = new THREE.Vector3();
             opponentVel = new THREE.Vector3();
-            ballVel = new THREE.Vector3();
             
             window.addEventListener('keydown', (e) => {
                 keys[e.code] = true;
@@ -556,27 +558,30 @@
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        function updateBall() {
-            ball.position.add(ballVel);
+        // ONLY HOST updates ball physics
+        function updateBallHost() {
+            if (!isHost) return;
+            
+            ballPos.add(ballVel);
             ballVel.multiplyScalar(BALL_FRICTION);
             
-            if (ball.position.y > 1.2) {
+            if (ballPos.y > 1.2) {
                 ballVel.y -= BALL_GRAVITY;
             } else {
-                ball.position.y = 1.2;
+                ballPos.y = 1.2;
                 ballVel.y *= -BALL_BOUNCE;
                 ballVel.x *= 0.98;
                 ballVel.z *= 0.98;
             }
             
-            if (Math.abs(ball.position.x) > 39) {
+            if (Math.abs(ballPos.x) > 39) {
                 ballVel.x *= -0.7;
-                ball.position.x = Math.sign(ball.position.x) * 39;
+                ballPos.x = Math.sign(ballPos.x) * 39;
             }
             
-            if (Math.abs(ball.position.z) > 59) {
-                if (Math.abs(ball.position.x) < 7.5 && ball.position.y < 6.5) {
-                    if (ball.position.z < 0) {
+            if (Math.abs(ballPos.z) > 59) {
+                if (Math.abs(ballPos.x) < 7.5 && ballPos.y < 6.5) {
+                    if (ballPos.z < 0) {
                         scoreBlue++;
                         document.getElementById('scoreBlue').innerText = scoreBlue;
                         socket.emit('goal', { roomCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
@@ -585,24 +590,27 @@
                         document.getElementById('scoreOrange').innerText = scoreOrange;
                         socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                     }
-                    ball.position.set(0, 5, 0);
+                    ballPos.set(0, 5, 0);
                     ballVel.set(0, 0, 0);
                     const goalPopup = document.getElementById('goal-popup');
                     goalPopup.style.display = 'block';
                     setTimeout(() => goalPopup.style.display = 'none', 1500);
                 } else {
                     ballVel.z *= -0.65;
-                    ball.position.z = Math.sign(ball.position.z) * 59;
+                    ballPos.z = Math.sign(ballPos.z) * 59;
                 }
             }
             
-            // SLOWER BALL HITS
-            if (myCar.position.distanceTo(ball.position) < 2.3) {
-                const hitDir = ball.position.clone().sub(myCar.position).normalize();
+            // Car-ball collision - ONLY HOST calculates this
+            if (myCar.position.distanceTo(ballPos) < 2.3) {
+                const hitDir = ballPos.clone().sub(myCar.position).normalize();
                 const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.2;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
                 ballVel.y += BALL_Y_BOOST;
             }
+            
+            // Update ball visual
+            ball.position.copy(ballPos);
         }
         
         function updateCamera() {
@@ -616,16 +624,18 @@
                 const lookOffset = new THREE.Vector3(0, 1, -7).applyAxisAngle(new THREE.Vector3(0,1,0), myRot);
                 camera.lookAt(myCar.position.clone().add(lookOffset));
             } else {
-                const toBall = new THREE.Vector3().subVectors(ball.position, myCar.position).normalize();
+                const toBall = new THREE.Vector3().subVectors(ballPos, myCar.position).normalize();
                 const cameraDistance = 9;
                 const cameraOffset = toBall.clone().multiplyScalar(-cameraDistance);
                 cameraOffset.y += 3.5;
                 camera.position.copy(myCar.position.clone().add(cameraOffset));
-                camera.lookAt(ball.position);
+                camera.lookAt(ballPos);
             }
         }
         
         function sendGameUpdate() {
+            if (!isHost) return;
+            
             const now = Date.now();
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
@@ -636,7 +646,7 @@
                         rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
                     },
                     ball: {
-                        x: ball.position.x, y: ball.position.y, z: ball.position.z,
+                        x: ballPos.x, y: ballPos.y, z: ballPos.z,
                         vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
                     },
                     score: { blue: scoreBlue, orange: scoreOrange }
@@ -650,9 +660,16 @@
             
             if (myCar) {
                 updateMyCar();
-                updateBall();
+                
+                if (isHost) {
+                    updateBallHost();
+                    sendGameUpdate();
+                } else {
+                    // Non-host: just update ball visual from received data
+                    if (ball) ball.position.copy(ballPos);
+                }
+                
                 updateCamera();
-                sendGameUpdate();
                 renderer.render(scene, camera);
             }
         }
