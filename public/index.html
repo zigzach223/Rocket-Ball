@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rocket League - Online Multiplayer</title>
+    <title>Rocket League - Demolition Mode!</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: white; pointer-events: none; z-index: 10; text-align: center; width: 100%; }
@@ -11,7 +11,7 @@
         .blue { color: #0088ff; }
         .orange { color: #ff8800; }
         .controls-hint { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
-        #goal-popup { 
+        #goal-popup, #demo-popup { 
             position: fixed; 
             top: 50%; 
             left: 50%; 
@@ -30,6 +30,12 @@
             white-space: nowrap;
             font-family: Arial, sans-serif;
             letter-spacing: 2px;
+        }
+        #demo-popup {
+            border-color: #ff4444;
+            text-shadow: 0 0 30px #ff4444, 0 0 20px #ff0000;
+            background: rgba(100,0,0,0.9);
+            font-size: 60px;
         }
         @keyframes goalPulse {
             0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
@@ -172,7 +178,7 @@
     <div id="lobbyScreen" class="lobby-screen">
         <div class="lobby-container">
             <h1>🏎️ ROCKET LEAGUE 🚗</h1>
-            <div class="subtitle">Online Multiplayer - Fixed Goals!</div>
+            <div class="subtitle">Demolition Mode! Boost into opponents to destroy them!</div>
             
             <div id="mainMenu">
                 <input type="text" id="playerName" placeholder="Enter your name">
@@ -220,10 +226,11 @@
         <div class="speedometer" id="speedometer">SPEED: 0 km/h</div>
         <div class="camera-indicator" id="camIndicator">🎥 Car Cam (Q/E)</div>
         <div class="controls-hint">
-            🎮 WASD + SHIFT (Boost) + SPACE (Jump) | Q/E: Toggle Camera
+            🎮 WASD + SHIFT (Boost) + SPACE (Jump) | Q/E: Toggle Camera | 💥 Boost into opponent to destroy!
         </div>
         <div class="connection-status" id="connStatus">🔌 Connecting...</div>
         <div id="goal-popup">⚽ GOAL! ⚽</div>
+        <div id="demo-popup">💥 DEMOLISHED! 💥</div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -250,6 +257,10 @@
         let lastSendTime = 0;
         let isResetting = false;
         let goalCooldown = false;
+        let myDemolished = false;
+        let opponentDemolished = false;
+        let myRespawnTimer = 0;
+        let opponentRespawnTimer = 0;
         const SEND_RATE = 1000 / 30;
         
         // Ball variables
@@ -275,7 +286,7 @@
         const BOUNDARY_X = ARENA_WIDTH / 2 - 5;
         const BOUNDARY_Z = ARENA_LENGTH / 2 - 5;
         
-        // ========== CAR PHYSICS - EQUAL FOR BOTH ==========
+        // ========== CAR PHYSICS ==========
         const MAX_NORMAL_SPEED = 0.2;
         const MAX_BOOST_SPEED = 0.3;
         const ACCEL = 0.012;
@@ -296,14 +307,17 @@
         const BALL_HIT_POWER = 0.8;
         const BALL_Y_BOOST = 0.15;
         
-        // ========== GOAL DETECTION AREA ==========
+        // ========== COLLISION ==========
+        const CAR_COLLISION_DISTANCE = 1.5;
+        const DEMOLITION_SPEED = 0.25; // Need to be going at least this fast to demolish
+        
+        // ========== GOAL DETECTION ==========
         const GOAL_WIDTH = 22;
         const GOAL_HEIGHT = 9;
-        const GOAL_DEPTH = 3;  // Deeper goal area
         
         const keys = {};
         
-        // Show goal popup with animation
+        // Show popup functions
         function showGoalPopup(team) {
             const popup = document.getElementById('goal-popup');
             if (team === 'blue') {
@@ -318,12 +332,63 @@
                 popup.style.background = 'rgba(200, 100, 0, 0.9)';
             }
             popup.style.display = 'block';
-            setTimeout(() => {
-                popup.style.display = 'none';
-            }, 1800);
+            setTimeout(() => { popup.style.display = 'none'; }, 1800);
         }
         
-        // Reset cars and ball after goal
+        function showDemolitionPopup(team) {
+            const popup = document.getElementById('demo-popup');
+            if (team === 'blue') {
+                popup.innerHTML = '💥 BLUE DESTROYED! 💥';
+                popup.style.borderColor = '#0088ff';
+                popup.style.background = 'rgba(0, 50, 100, 0.9)';
+            } else {
+                popup.innerHTML = '💥 ORANGE DESTROYED! 💥';
+                popup.style.borderColor = '#ff8800';
+                popup.style.background = 'rgba(100, 50, 0, 0.9)';
+            }
+            popup.style.display = 'block';
+            setTimeout(() => { popup.style.display = 'none'; }, 1500);
+        }
+        
+        // Respawn car after demolition
+        function respawnMyCar() {
+            myDemolished = false;
+            myRespawnTimer = 0;
+            if (amIBlue) {
+                myCar.position.copy(blueStartPos);
+                myRot = 0;
+            } else {
+                myCar.position.copy(orangeStartPos);
+                myRot = Math.PI;
+            }
+            myVel.set(0, 0, 0);
+            myCar.rotation.y = myRot;
+            myBoost = 100;
+            myCar.visible = true;
+        }
+        
+        function respawnOpponentCar() {
+            opponentDemolished = false;
+            opponentRespawnTimer = 0;
+            if (amIBlue) {
+                targetOpponentPos.copy(orangeStartPos);
+                targetOpponentRot = Math.PI;
+                currentOpponentPos.copy(orangeStartPos);
+                currentOpponentRot = Math.PI;
+            } else {
+                targetOpponentPos.copy(blueStartPos);
+                targetOpponentRot = 0;
+                currentOpponentPos.copy(blueStartPos);
+                currentOpponentRot = 0;
+            }
+            if (opponentCar) {
+                opponentCar.visible = true;
+                opponentCar.position.copy(currentOpponentPos);
+                opponentCar.rotation.y = currentOpponentRot;
+            }
+        }
+        
+        // Reset after goal
         function resetAfterGoal() {
             isResetting = true;
             
@@ -339,7 +404,7 @@
             myCar.rotation.y = myRot;
             myBoost = 100;
             
-            // Reset opponent's target position
+            // Reset opponent
             if (amIBlue) {
                 targetOpponentPos.copy(orangeStartPos);
                 targetOpponentRot = Math.PI;
@@ -355,16 +420,14 @@
             // Tell opponent to reset
             socket.emit('reset-cars', { roomCode: currentLobby });
             
-            // Reset ball (host only)
+            // Reset ball
             if (isHost) {
                 ballPos.set(0, 5, 0);
                 ballVel.set(0, 0, 0);
                 ball.position.copy(ballPos);
             }
             
-            setTimeout(() => {
-                isResetting = false;
-            }, 800);
+            setTimeout(() => { isResetting = false; }, 800);
         }
         
         // Socket events
@@ -409,7 +472,7 @@
         
         // Receive opponent's car position
         socket.on('opponent-update', (data) => {
-            if (data.car && !isResetting) {
+            if (data.car && !isResetting && !opponentDemolished) {
                 targetOpponentPos.x = data.car.x;
                 targetOpponentPos.z = data.car.z;
                 targetOpponentPos.y = data.car.y;
@@ -441,18 +504,27 @@
                 scoreOrange = data.score.orange;
                 document.getElementById('scoreBlue').innerText = scoreBlue;
                 document.getElementById('scoreOrange').innerText = scoreOrange;
-                
-                // Show goal popup
                 showGoalPopup(data.team);
-                
-                // Reset everything
                 resetAfterGoal();
-                
                 setTimeout(() => { goalCooldown = false; }, 1500);
             }
         });
         
-        // Receive reset command from host
+        // Receive demolition event
+        socket.on('demolition', (data) => {
+            if (data.target === 'me') {
+                myDemolished = true;
+                myRespawnTimer = 2;
+                myCar.visible = false;
+                showDemolitionPopup(amIBlue ? 'blue' : 'orange');
+            } else if (data.target === 'opponent') {
+                opponentDemolished = true;
+                opponentRespawnTimer = 2;
+                if (opponentCar) opponentCar.visible = false;
+            }
+        });
+        
+        // Receive reset command
         socket.on('reset-cars', (data) => {
             if (!isHost && !isResetting) {
                 if (amIBlue) {
@@ -465,6 +537,8 @@
                 myVel.set(0, 0, 0);
                 myCar.rotation.y = myRot;
                 myBoost = 100;
+                myDemolished = false;
+                myCar.visible = true;
                 
                 if (amIBlue) {
                     targetOpponentPos.copy(orangeStartPos);
@@ -473,6 +547,8 @@
                     targetOpponentPos.copy(blueStartPos);
                     targetOpponentRot = 0;
                 }
+                opponentDemolished = false;
+                if (opponentCar) opponentCar.visible = true;
             }
         });
         
@@ -549,7 +625,6 @@
             floor.receiveShadow = true;
             scene.add(floor);
             
-            // Grid helper
             const gridHelper = new THREE.GridHelper(ARENA_LENGTH, 40, 0x66ff66, 0x33aa33);
             gridHelper.position.y = 0.02;
             scene.add(gridHelper);
@@ -563,11 +638,9 @@
             
             // Arena walls
             const wallMat = new THREE.MeshPhongMaterial({ color: 0x44aa44, transparent: true, opacity: 0.3 });
-            
             const leftWall = new THREE.Mesh(new THREE.BoxGeometry(1, ARENA_HEIGHT, ARENA_LENGTH), wallMat);
             leftWall.position.set(-ARENA_WIDTH/2, ARENA_HEIGHT/2, 0);
             scene.add(leftWall);
-            
             const rightWall = new THREE.Mesh(new THREE.BoxGeometry(1, ARENA_HEIGHT, ARENA_LENGTH), wallMat);
             rightWall.position.set(ARENA_WIDTH/2, ARENA_HEIGHT/2, 0);
             scene.add(rightWall);
@@ -631,7 +704,7 @@
             ball.castShadow = true;
             scene.add(ball);
             
-            // GOAL AREAS - Visual only, actual goal detection is in physics
+            // Goal visuals
             const goalBlueMat = new THREE.MeshPhongMaterial({ color: 0x0088ff, emissive: 0x004466, transparent: true, opacity: 0.5 });
             const goalBlueObj = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, GOAL_HEIGHT, 1), goalBlueMat);
             goalBlueObj.position.set(0, GOAL_HEIGHT/2, BOUNDARY_Z + 3);
@@ -644,15 +717,12 @@
             
             // Goal posts
             const postMat = new THREE.MeshPhongMaterial({ color: 0xccaa88 });
-            
             const leftPostBlue = new THREE.Mesh(new THREE.BoxGeometry(0.5, GOAL_HEIGHT, 0.5), postMat);
             leftPostBlue.position.set(-GOAL_WIDTH/2, GOAL_HEIGHT/2, BOUNDARY_Z + 3);
             scene.add(leftPostBlue);
-            
             const rightPostBlue = new THREE.Mesh(new THREE.BoxGeometry(0.5, GOAL_HEIGHT, 0.5), postMat);
             rightPostBlue.position.set(GOAL_WIDTH/2, GOAL_HEIGHT/2, BOUNDARY_Z + 3);
             scene.add(rightPostBlue);
-            
             const topBarBlue = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, 0.5, 0.5), postMat);
             topBarBlue.position.set(0, GOAL_HEIGHT, BOUNDARY_Z + 3);
             scene.add(topBarBlue);
@@ -660,11 +730,9 @@
             const leftPostOrange = new THREE.Mesh(new THREE.BoxGeometry(0.5, GOAL_HEIGHT, 0.5), postMat);
             leftPostOrange.position.set(-GOAL_WIDTH/2, GOAL_HEIGHT/2, -BOUNDARY_Z - 3);
             scene.add(leftPostOrange);
-            
             const rightPostOrange = new THREE.Mesh(new THREE.BoxGeometry(0.5, GOAL_HEIGHT, 0.5), postMat);
             rightPostOrange.position.set(GOAL_WIDTH/2, GOAL_HEIGHT/2, -BOUNDARY_Z - 3);
             scene.add(rightPostOrange);
-            
             const topBarOrange = new THREE.Mesh(new THREE.BoxGeometry(GOAL_WIDTH, 0.5, 0.5), postMat);
             topBarOrange.position.set(0, GOAL_HEIGHT, -BOUNDARY_Z - 3);
             scene.add(topBarOrange);
@@ -685,7 +753,7 @@
         }
         
         function updateMyCar() {
-            if (isResetting) return;
+            if (isResetting || myDemolished) return;
             
             const isBoosting = keys['ShiftLeft'] && myBoost > 0;
             
@@ -762,8 +830,75 @@
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // BALL PHYSICS with FIXED GOAL DETECTION
-        function updateBallHost() {
+        // Check for car collisions and demolition
+        function checkCarCollisions() {
+            if (isResetting || myDemolished || opponentDemolished) return;
+            if (!myCar || !opponentCar) return;
+            
+            const distance = myCar.position.distanceTo(opponentCar.position);
+            
+            if (distance < CAR_COLLISION_DISTANCE) {
+                const mySpeed = Math.abs(myVel.z);
+                const oppSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
+                
+                // Check if I demolished opponent (I'm boosting and at high speed)
+                const isBoosting = keys['ShiftLeft'] && myBoost > 0;
+                if (isBoosting && mySpeed >= DEMOLITION_SPEED) {
+                    // I demolish opponent!
+                    opponentDemolished = true;
+                    opponentRespawnTimer = 2;
+                    if (opponentCar) opponentCar.visible = false;
+                    socket.emit('demolition', { roomCode: currentLobby, target: 'opponent' });
+                    showDemolitionPopup(amIBlue ? 'blue' : 'orange');
+                }
+                // Check if opponent demolished me (they are boosting at high speed)
+                else if (opponentVel && Math.abs(opponentVel.z) >= DEMOLITION_SPEED) {
+                    // Opponent demolishes me!
+                    myDemolished = true;
+                    myRespawnTimer = 2;
+                    myCar.visible = false;
+                    socket.emit('demolition', { roomCode: currentLobby, target: 'me' });
+                    showDemolitionPopup(amIBlue ? 'orange' : 'blue');
+                }
+                // Regular bump - push cars apart
+                else {
+                    const direction = myCar.position.clone().sub(opponentCar.position).normalize();
+                    const bumpForce = 0.08;
+                    myCar.position.add(direction.clone().multiplyScalar(bumpForce));
+                    myVel.z *= 0.5;
+                    
+                    // Tell opponent about bump (handled by host)
+                    if (isHost) {
+                        socket.emit('opponent-update', {
+                            roomCode: currentLobby,
+                            car: {
+                                x: myCar.position.x, y: myCar.position.y, z: myCar.position.z,
+                                rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Update respawn timers
+        function updateRespawnTimers(deltaTime) {
+            if (myDemolished) {
+                myRespawnTimer -= deltaTime;
+                if (myRespawnTimer <= 0) {
+                    respawnMyCar();
+                }
+            }
+            if (opponentDemolished) {
+                opponentRespawnTimer -= deltaTime;
+                if (opponentRespawnTimer <= 0) {
+                    respawnOpponentCar();
+                }
+            }
+        }
+        
+        // BALL PHYSICS
+        function updateBallHost(deltaTime) {
             if (!isHost || isResetting) return;
             
             ballPos.add(ballVel);
@@ -778,64 +913,53 @@
                 ballVel.z *= 0.99;
             }
             
-            // Boundaries
             if (Math.abs(ballPos.x) > BOUNDARY_X) {
                 ballVel.x *= -0.75;
                 ballPos.x = Math.sign(ballPos.x) * BOUNDARY_X;
             }
             
-            // FIXED GOAL DETECTION - Ball goes THROUGH the net into the goal
+            // Goal detection
             const goalZoneWidth = GOAL_WIDTH / 2;
             const goalZoneHeight = GOAL_HEIGHT;
             
-            // Blue Goal (positive Z)
             if (ballPos.z > BOUNDARY_Z + 2) {
-                // Check if ball is within goal area
                 if (Math.abs(ballPos.x) < goalZoneWidth && ballPos.y < goalZoneHeight) {
                     if (!goalCooldown && !isResetting) {
                         scoreBlue++;
                         document.getElementById('scoreBlue').innerText = scoreBlue;
-                        console.log("GOAL! Blue scores! Score:", scoreBlue);
                         socket.emit('goal', { roomCode: currentLobby, team: 'blue', score: { blue: scoreBlue, orange: scoreOrange } });
                         goalCooldown = true;
                         setTimeout(() => { goalCooldown = false; }, 1000);
                     }
-                    // Reset ball position after goal detection
                     ballPos.set(0, 5, 0);
                     ballVel.set(0, 0, 0);
                     return;
                 } else {
-                    // Hit the back wall
                     ballVel.z *= -0.7;
                     ballPos.z = BOUNDARY_Z + 2;
                 }
             }
             
-            // Orange Goal (negative Z)
             if (ballPos.z < -BOUNDARY_Z - 2) {
-                // Check if ball is within goal area
                 if (Math.abs(ballPos.x) < goalZoneWidth && ballPos.y < goalZoneHeight) {
                     if (!goalCooldown && !isResetting) {
                         scoreOrange++;
                         document.getElementById('scoreOrange').innerText = scoreOrange;
-                        console.log("GOAL! Orange scores! Score:", scoreOrange);
                         socket.emit('goal', { roomCode: currentLobby, team: 'orange', score: { blue: scoreBlue, orange: scoreOrange } });
                         goalCooldown = true;
                         setTimeout(() => { goalCooldown = false; }, 1000);
                     }
-                    // Reset ball position after goal detection
                     ballPos.set(0, 5, 0);
                     ballVel.set(0, 0, 0);
                     return;
                 } else {
-                    // Hit the back wall
                     ballVel.z *= -0.7;
                     ballPos.z = -BOUNDARY_Z - 2;
                 }
             }
             
             // Car-ball collision for MY CAR
-            if (myCar.position.distanceTo(ballPos) < 2.3) {
+            if (!myDemolished && myCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(myCar.position).normalize();
                 const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.25;
                 ballVel.add(hitDir.multiplyScalar(hitPower));
@@ -843,7 +967,7 @@
             }
             
             // Car-ball collision for OPPONENT CAR
-            if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
+            if (!opponentDemolished && opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
                 const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
                 const hitPower = opponentSpeed * BALL_HIT_POWER + 0.25;
@@ -856,7 +980,7 @@
         
         // Smooth opponent movement
         function smoothOpponent() {
-            if (!opponentCar || isResetting) return;
+            if (!opponentCar || isResetting || opponentDemolished) return;
             
             currentOpponentPos.lerp(targetOpponentPos, 0.3);
             currentOpponentRot += (targetOpponentRot - currentOpponentRot) * 0.3;
@@ -870,6 +994,15 @@
         }
         
         function updateCamera() {
+            if (myDemolished) {
+                // Camera floats above where the car was demolished
+                const deathPos = myCar.position.clone();
+                deathPos.y += 3;
+                camera.position.copy(deathPos);
+                camera.lookAt(0, 0, 0);
+                return;
+            }
+            
             if (camMode === 'car') {
                 const speed = Math.abs(myVel.z);
                 const speedFactor = Math.min(speed / MAX_BOOST_SPEED, 0.6);
@@ -890,7 +1023,7 @@
         }
         
         function sendUpdates() {
-            if (isResetting) return;
+            if (isResetting || myDemolished) return;
             
             const now = Date.now();
             if (now - lastSendTime > SEND_RATE && currentLobby) {
@@ -917,15 +1050,26 @@
             }
         }
         
-        function animate() {
+        let lastTimestamp = 0;
+        function animate(currentTime) {
             if (!scene) return;
             requestAnimationFrame(animate);
             
+            // Calculate delta time for timers
+            let delta = (currentTime - lastTimestamp) / 1000;
+            if (delta > 0.1) delta = 0.1;
+            lastTimestamp = currentTime;
+            
             if (myCar && !isResetting) {
-                updateMyCar();
+                if (!myDemolished) {
+                    updateMyCar();
+                    checkCarCollisions();
+                }
+                
+                updateRespawnTimers(delta);
                 
                 if (isHost) {
-                    updateBallHost();
+                    updateBallHost(delta);
                 }
                 
                 smoothOpponent();

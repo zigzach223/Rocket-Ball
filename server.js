@@ -55,28 +55,25 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Forward opponent car updates
     socket.on('opponent-update', (data) => {
-        socket.to(data.roomCode).emit('opponent-update', {
-            car: data.car
-        });
+        socket.to(data.roomCode).emit('opponent-update', { car: data.car });
     });
     
-    // Forward ball updates from host
     socket.on('ball-update', (data) => {
-        socket.to(data.roomCode).emit('ball-update', {
-            ball: data.ball,
-            score: data.score
-        });
+        socket.to(data.roomCode).emit('ball-update', { ball: data.ball, score: data.score });
     });
     
-    // Forward car reset command
-    socket.on('reset-cars', (data) => {
-        socket.to(data.roomCode).emit('reset-cars', {});
+    // NEW: Demolition event
+    socket.on('demolition', (data) => {
+        socket.to(data.roomCode).emit('demolition', { target: data.target });
     });
     
     socket.on('goal', (data) => {
         io.to(data.roomCode).emit('goal', { team: data.team, score: data.score });
+    });
+    
+    socket.on('reset-cars', (data) => {
+        socket.to(data.roomCode).emit('reset-cars', {});
     });
     
     socket.on('disconnect', () => {
