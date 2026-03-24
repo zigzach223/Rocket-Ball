@@ -228,7 +228,6 @@
         let scoreBlue = 0, scoreOrange = 0;
         let camMode = 'car';
         let lastSendTime = 0;
-        let lastBallUpdateTime = 0;
         const SEND_RATE = 1000 / 30;
         
         // Ball variables - ONLY HOST controls these!
@@ -236,8 +235,8 @@
         let ballVel = new THREE.Vector3(0, 0, 0);
         
         // Physics constants
-        const MAX_NORMAL_SPEED = 0.2;
-        const MAX_BOOST_SPEED = 0.3;
+        const MAX_NORMAL_SPEED = 0.15;
+        const MAX_BOOST_SPEED = 0.25;
         const ACCEL = 0.018;
         const BOOST_ACCEL = 0.042;
         const TURN_SPEED = 0.028;
@@ -294,8 +293,9 @@
             initGame();
         });
         
-        // Receive game updates from host
+        // Receive BOTH players' car updates and ball updates
         socket.on('game-update', (data) => {
+            // Update opponent car position (from the other player)
             if (opponentCar && data.car) {
                 opponentCar.position.x = data.car.x;
                 opponentCar.position.z = data.car.z;
@@ -304,7 +304,7 @@
             }
             
             // ALWAYS use ball position from host (only host updates ball)
-            if (data.ball && ball) {
+            if (isHost === false && data.ball && ball) {
                 ballPos.x = data.ball.x;
                 ballPos.z = data.ball.z;
                 ballPos.y = data.ball.y;
@@ -558,7 +558,7 @@
             document.getElementById('speedometer').innerHTML = `SPEED: ${speedKmh} km/h`;
         }
         
-        // ONLY HOST updates ball physics
+        // ONLY HOST updates ball physics and handles collisions with BOTH cars
         function updateBallHost() {
             if (!isHost) return;
             
@@ -601,7 +601,7 @@
                 }
             }
             
-            // Car-ball collision - ONLY HOST calculates this
+            // Car-ball collision for MY CAR
             if (myCar.position.distanceTo(ballPos) < 2.3) {
                 const hitDir = ballPos.clone().sub(myCar.position).normalize();
                 const hitPower = Math.abs(myVel.z) * BALL_HIT_POWER + 0.2;
@@ -609,8 +609,29 @@
                 ballVel.y += BALL_Y_BOOST;
             }
             
+            // Car-ball collision for OPPONENT CAR (using opponent's position from network)
+            if (opponentCar && opponentCar.position.distanceTo(ballPos) < 2.3) {
+                const hitDir = ballPos.clone().sub(opponentCar.position).normalize();
+                // Use opponent's velocity (stored from network)
+                const opponentSpeed = opponentVel ? Math.abs(opponentVel.z) : 0;
+                const hitPower = opponentSpeed * BALL_HIT_POWER + 0.2;
+                ballVel.add(hitDir.multiplyScalar(hitPower));
+                ballVel.y += BALL_Y_BOOST;
+            }
+            
             // Update ball visual
             ball.position.copy(ballPos);
+        }
+        
+        // Update opponent's velocity from their position changes
+        let lastOpponentPos = new THREE.Vector3();
+        function updateOpponentVelocity() {
+            if (opponentCar) {
+                if (lastOpponentPos.x !== 0 || lastOpponentPos.y !== 0 || lastOpponentPos.z !== 0) {
+                    opponentVel = opponentCar.position.clone().sub(lastOpponentPos);
+                }
+                lastOpponentPos.copy(opponentCar.position);
+            }
         }
         
         function updateCamera() {
@@ -634,8 +655,6 @@
         }
         
         function sendGameUpdate() {
-            if (!isHost) return;
-            
             const now = Date.now();
             if (now - lastSendTime > SEND_RATE && currentLobby) {
                 lastSendTime = now;
@@ -645,10 +664,10 @@
                         x: myCar.position.x, y: myCar.position.y, z: myCar.position.z,
                         rot: myRot, vx: myVel.x, vy: myVel.y, vz: myVel.z
                     },
-                    ball: {
+                    ball: isHost ? {
                         x: ballPos.x, y: ballPos.y, z: ballPos.z,
                         vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
-                    },
+                    } : null,
                     score: { blue: scoreBlue, orange: scoreOrange }
                 });
             }
@@ -660,6 +679,7 @@
             
             if (myCar) {
                 updateMyCar();
+                updateOpponentVelocity();
                 
                 if (isHost) {
                     updateBallHost();
@@ -667,6 +687,8 @@
                 } else {
                     // Non-host: just update ball visual from received data
                     if (ball) ball.position.copy(ballPos);
+                    // Non-host also sends their car position
+                    sendGameUpdate();
                 }
                 
                 updateCamera();

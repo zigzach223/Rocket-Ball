@@ -55,7 +55,9 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Forward game updates to the other player
     socket.on('game-update', (data) => {
+        // Send to the other player in the room
         socket.to(data.roomCode).emit('game-update', {
             car: data.car,
             ball: data.ball,
